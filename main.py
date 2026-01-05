@@ -29,6 +29,8 @@ class MetricsCallback(BaseCallback):
         self.task = task
         self.log_interval = log_interval
         self.sparsities = []
+        # Recent rewards collected from trainer locals (if available)
+        self.rewards = []
         # For perplexity: aggregate log-likelihood and word counts for proper PPL calculation
         self.log_likelihoods = []
         self.baseline_log_likelihoods = []
@@ -63,6 +65,29 @@ class MetricsCallback(BaseCallback):
             else:
                 self.accuracies.append(float(info.get("correct", False)))
 
+        # Try to collect rewards from trainer locals (stable-baselines3 provides
+        # a `rewards` entry containing the reward(s) for the recent step(s)).
+        rewards = self.locals.get("rewards", None)
+        if rewards is not None:
+            # Normalize to a Python list of floats
+            try:
+                if isinstance(rewards, np.ndarray):
+                    rewards_list = rewards.tolist()
+                elif isinstance(rewards, (float, int)):
+                    rewards_list = [float(rewards)]
+                else:
+                    rewards_list = list(rewards)
+            except Exception:
+                rewards_list = [float(rewards)]
+
+            # Align number of reward entries with number of infos (if mismatched,
+            # only take the common prefix)
+            if len(rewards_list) != n_infos:
+                m = min(len(rewards_list), n_infos)
+                rewards_list = rewards_list[:m]
+
+            self.rewards.extend([float(r) for r in rewards_list])
+
         # Increment total number of appended info entries and trigger
         # logging when we've accumulated `log_interval` env steps.
         self.info_count += len(infos)
@@ -85,6 +110,14 @@ class MetricsCallback(BaseCallback):
             else:
                 recent_acc = self.accuracies[-self.log_interval:]
                 metric_str = f"Acc: {np.mean(recent_acc):>6.2%}"
+            # Recent mean reward, if available
+            recent_rewards = self.rewards[-self.log_interval:] if len(self.rewards) >= 1 else []
+            if len(recent_rewards) > 0:
+                mean_reward = float(np.mean(recent_rewards))
+                reward_str = f" | AvgReward: {mean_reward:.4f}"
+            else:
+                mean_reward = None
+                reward_str = ""
             
             # Keep the tqdm postfix compact (sparsity only) so the detailed
             # metric values are not overwritten in place. Also emit a permanent
@@ -93,15 +126,16 @@ class MetricsCallback(BaseCallback):
                 self.pbar.set_postfix_str(f"Sparsity: {np.mean(recent_sparsity):.2%}")
 
             # Permanent log line (prints to stdout and remains in terminal history)
-            print(f"[{self.n_calls}] {metric_str} | Sparsity: {np.mean(recent_sparsity):.2%}")
+            print(f"[{self.n_calls}] {metric_str} | Sparsity: {np.mean(recent_sparsity):.2%}{reward_str}")
 
             # Save aggregate snapshot to history
             self.history.append(
-                {
-                    "step": int(self.n_calls),
-                    "metric": metric_str,
-                    "sparsity": float(np.mean(recent_sparsity)),
-                }
+                    {
+                        "step": int(self.n_calls),
+                        "metric": metric_str,
+                        "sparsity": float(np.mean(recent_sparsity)),
+                        "reward": (float(mean_reward) if mean_reward is not None else None),
+                    }
             )
         
         return True
