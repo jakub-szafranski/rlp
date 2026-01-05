@@ -198,5 +198,6 @@ class LLMPruningEnv(gym.Env):
         # Single-step episode (contextual bandit)
         terminated = True
         truncated = False
+        print("DEBUG: Step info:", info)
         
         return obs, float(reward), terminated, truncated, info
