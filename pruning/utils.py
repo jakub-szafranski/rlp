@@ -143,8 +143,8 @@ def unprune_from_undo_pack(
         dev = device or mlp.gate_proj.weight.device
 
         entry = pack.layers[layer_idx]
-        keep_idx = entry.keep_idx.to(torch.long, device=dev)
-        rem_idx  = entry.rem_idx.to(torch.long, device=dev)
+        keep_idx = entry.keep_idx.to(device=dev, dtype=torch.long)
+        rem_idx  = entry.rem_idx.to(device=dev, dtype=torch.long)
 
         gate_dtype = _dtype_from_str(entry.dtype_gate)
         up_dtype   = _dtype_from_str(entry.dtype_up)
