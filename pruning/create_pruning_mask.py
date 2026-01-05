@@ -21,6 +21,8 @@ def get_pruning_mask(clusters_to_prune: list[str], layer: str) -> np.ndarray:
     Generates pruning masks for the specified layer based on clusters to prune.
     For now only 'up_proj' masks are considered.
     """
+    if layer in {"0", "1", "30", "31"}:
+        return np.ones((14_336,))  # No pruning for first and last layers
     up_projs = []
     # down_projs = []
     for cluster in clusters_to_prune:
