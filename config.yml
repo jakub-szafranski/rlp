@@ -63,7 +63,7 @@ environment:
 # PPO Hyperparameters
 # -----------------------------------------------------------------------------
 ppo:
-  learning_rate: 1.0e-5
+  learning_rate: 3.0e-4
   n_steps: 128                # steps per rollout before update
   batch_size: 32
   n_epochs: 2                # PPO epochs per update
