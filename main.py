@@ -21,16 +21,25 @@ def load_config(config_path: str = "config.yml") -> dict:
 
 
 class MetricsCallback(BaseCallback):
-    """Callback for logging metrics during training."""
+    """Callback for logging metrics during training with tqdm progress bar."""
     
-    def __init__(self, task: str = "perplexity", log_interval: int = 100, verbose: int = 0):
+    def __init__(self, total_timesteps: int, task: str = "perplexity", log_interval: int = 100, verbose: int = 0):
         super().__init__(verbose)
+        self.total_timesteps = total_timesteps
         self.task = task
         self.log_interval = log_interval
         self.metrics = []  # perplexity or accuracy
         self.sparsities = []
+        self.pbar = None
+    
+    def _on_training_start(self) -> None:
+        """Initialize the progress bar at training start."""
+        self.pbar = tqdm(total=self.total_timesteps, desc="Training", unit="step")
     
     def _on_step(self) -> bool:
+        if self.pbar is not None:
+            self.pbar.update(1)
+        
         infos = self.locals.get("infos", [])
         for info in infos:
             self.sparsities.append(info["sparsity"])
@@ -44,18 +53,20 @@ class MetricsCallback(BaseCallback):
             recent_sparsity = self.sparsities[-self.log_interval:]
             
             if self.task == "perplexity":
-                print(
-                    f"Step {self.n_calls:>6} | "
-                    f"PPL: {np.mean(recent_metrics):>8.2f} | "
-                    f"Sparsity: {np.mean(recent_sparsity):>6.2%}"
-                )
+                metric_str = f"PPL: {np.mean(recent_metrics):>8.2f}"
             else:
-                print(
-                    f"Step {self.n_calls:>6} | "
-                    f"Acc: {np.mean(recent_metrics):>6.2%} | "
-                    f"Sparsity: {np.mean(recent_sparsity):>6.2%}"
-                )
+                metric_str = f"Acc: {np.mean(recent_metrics):>6.2%}"
+            
+            # Update progress bar postfix with metrics
+            if self.pbar is not None:
+                self.pbar.set_postfix_str(f"{metric_str} | Sparsity: {np.mean(recent_sparsity):.2%}")
+        
         return True
+    
+    def _on_training_end(self) -> None:
+        """Close the progress bar at training end."""
+        if self.pbar is not None:
+            self.pbar.close()
 
 
 def create_data_source(config: dict, split: str, max_samples: int | None = None):
@@ -190,7 +201,11 @@ def train(config: dict):
     print("=" * 60)
     
     task = "correctness" if dataset == "mmlu" else "perplexity"
-    callback = MetricsCallback(task=task, log_interval=train_conf.get("log_interval", 100))
+    callback = MetricsCallback(
+        total_timesteps=train_conf["total_timesteps"],
+        task=task, 
+        log_interval=train_conf.get("log_interval", 100)
+    )
     agent.learn(total_timesteps=train_conf["total_timesteps"], callback=callback)
     
     save_path = train_conf.get("save_path", "ppo_pruning_agent")
