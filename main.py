@@ -28,8 +28,13 @@ class MetricsCallback(BaseCallback):
         self.total_timesteps = total_timesteps
         self.task = task
         self.log_interval = log_interval
-        self.metrics = []  # perplexity or accuracy
         self.sparsities = []
+        # For perplexity: aggregate log-likelihood and word counts for proper PPL calculation
+        self.log_likelihoods = []
+        self.baseline_log_likelihoods = []
+        self.word_counts = []
+        # For accuracy
+        self.accuracies = []
         self.pbar = None
     
     def _on_training_start(self) -> None:
@@ -44,20 +49,31 @@ class MetricsCallback(BaseCallback):
         for info in infos:
             self.sparsities.append(info["sparsity"])
             if self.task == "perplexity":
-                self.metrics.append(info.get("perplexity", 0))
+                self.log_likelihoods.append(info.get("log_likelihood", 0.0))
+                self.baseline_log_likelihoods.append(info.get("baseline_log_likelihood", 0.0))
+                self.word_counts.append(info.get("word_count", 0))
             else:
-                self.metrics.append(float(info.get("correct", False)))
+                self.accuracies.append(float(info.get("correct", False)))
         
-        if self.n_calls % self.log_interval == 0 and self.metrics:
-            recent_metrics = self.metrics[-self.log_interval:]
+        if self.n_calls % self.log_interval == 0:
             recent_sparsity = self.sparsities[-self.log_interval:]
             
             if self.task == "perplexity":
-                metric_str = f"PPL: {np.mean(recent_metrics):>8.2f}"
+                # Aggregate log-likelihoods and word counts for proper perplexity
+                recent_ll = self.log_likelihoods[-self.log_interval:]
+                recent_baseline_ll = self.baseline_log_likelihoods[-self.log_interval:]
+                recent_wc = self.word_counts[-self.log_interval:]
+                total_wc = sum(recent_wc)
+                if total_wc > 0:
+                    pruned_ppl = np.exp(-sum(recent_ll) / total_wc)
+                    baseline_ppl = np.exp(-sum(recent_baseline_ll) / total_wc)
+                    metric_str = f"PPL: {pruned_ppl:>6.2f} (base: {baseline_ppl:.2f})"
+                else:
+                    metric_str = "PPL: N/A"
             else:
-                metric_str = f"Acc: {np.mean(recent_metrics):>6.2%}"
+                recent_acc = self.accuracies[-self.log_interval:]
+                metric_str = f"Acc: {np.mean(recent_acc):>6.2%}"
             
-            # Update progress bar postfix with metrics
             if self.pbar is not None:
                 self.pbar.set_postfix_str(f"{metric_str} | Sparsity: {np.mean(recent_sparsity):.2%}")
         

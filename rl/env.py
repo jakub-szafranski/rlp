@@ -136,7 +136,7 @@ class LLMPruningEnv(gym.Env):
         
         # Compute baseline on unpruned model
         if self.task == "perplexity":
-            baseline_ppl = self.metric_calculator.compute(self.model, self._current_item)
+            baseline_ll, word_count = self.metric_calculator.compute(self.model, self._current_item)
         
         # Apply pruning
         mask_fn = self.mask_adapter.get_mask_fn(action)
@@ -156,9 +156,26 @@ class LLMPruningEnv(gym.Env):
         }
         
         if self.task == "perplexity":
-            reward = self.reward_calculator.compute_reward(metric_value, baseline_ppl, sparsity)
-            info["perplexity"] = metric_value
-            info["baseline_perplexity"] = baseline_ppl
+            pruned_ll, word_count = metric_value
+            
+            if word_count > 0:
+                # Compute per-doc perplexity for reward
+                baseline_ppl = np.exp(-baseline_ll / word_count)
+                pruned_ppl = np.exp(-pruned_ll / word_count)
+                reward = self.reward_calculator.compute_reward(pruned_ppl, baseline_ppl, sparsity)
+                
+                info["perplexity"] = pruned_ppl
+                info["baseline_perplexity"] = baseline_ppl
+            else:
+                # Handle empty document case - neutral reward
+                reward = 0.0
+                info["perplexity"] = 0.0
+                info["baseline_perplexity"] = 0.0
+            
+            # Store raw log-likelihood and word_count for proper aggregation
+            info["log_likelihood"] = pruned_ll
+            info["baseline_log_likelihood"] = baseline_ll
+            info["word_count"] = word_count
         else:  # correctness
             correct = metric_value  # bool
             reward = self.reward_calculator.compute_reward(correct, sparsity)

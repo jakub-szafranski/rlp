@@ -34,7 +34,7 @@ class PerplexityCalculator(MetricCalculator):
     Key implementation details:
     - Uses DISJOINT (non-overlapping) windows
     - Prepends EOS token to each document
-    - Computes WORD-level perplexity (total_log_likelihood / word_count)
+    - Returns (log_likelihood, word_count) tuple for proper aggregation
     """
     
     def __init__(self, tokenizer, max_length: int = 2048):
@@ -42,16 +42,16 @@ class PerplexityCalculator(MetricCalculator):
         self.max_length = max_length
     
     @torch.no_grad()
-    def compute(self, model: PrunableLLM, item: dict) -> float:
+    def compute(self, model: PrunableLLM, item: dict) -> tuple[float, int]:
         """
-        Compute word-level perplexity for a WikiText document.
+        Compute log-likelihood and word count for a WikiText document.
         
         Args:
             model: The language model.
             item: Dict with 'text' (detokenized) and 'word_count'.
             
         Returns:
-            Word-level perplexity (float). Returns inf if empty.
+            Tuple of (log_likelihood, word_count). Returns (0.0, 0) if empty.
         """
         device = next(model.parameters()).device
         
@@ -61,7 +61,7 @@ class PerplexityCalculator(MetricCalculator):
         # Tokenize (text should already be detokenized by WikiTextDataSource)
         tokens = self.tokenizer.encode(text, add_special_tokens=False)
         if not tokens:
-            return float('inf')
+            return (0.0, 0)
         
         # Prepend EOS token (matches lm-eval-harness)
         tokens = [self.tokenizer.eos_token_id] + tokens
@@ -90,11 +90,7 @@ class PerplexityCalculator(MetricCalculator):
             
             total_log_likelihood += token_log_probs.sum().item()
         
-        if word_count == 0:
-            return float('inf')
-        
-        word_perplexity = np.exp(-total_log_likelihood / word_count)
-        return float(word_perplexity)
+        return (total_log_likelihood, word_count)
     
 
 
