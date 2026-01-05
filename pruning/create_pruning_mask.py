@@ -28,7 +28,7 @@ def get_pruning_mask(clusters_to_prune: list[str], layer: str) -> np.ndarray:
             up_projs.append(_CLUSTER_MASKS["up_proj"][layer][cluster])
             # down_projs.append(_CLUSTER_MASKS["down_proj"][layer][cluster])
     if not up_projs:
-        return np.ones((14_366,))
+        return np.ones((14_336,))
     up_proj = 1 - _reduce_logical_or(np.stack(up_projs, axis=0))
     # down_proj = 1 - _reduce_logical_or(np.stack(down_projs, axis=0)) - -- IGNORE ---
     return up_proj #, down_proj -- IGNORE ---
