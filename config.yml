@@ -63,27 +63,27 @@ environment:
 # PPO Hyperparameters
 # -----------------------------------------------------------------------------
 ppo:
-  learning_rate: 3.0e-4
-  n_steps: 64                # steps per rollout before update
+  learning_rate: 1.0e-5
+  n_steps: 128                # steps per rollout before update
   batch_size: 32
-  n_epochs: 4                # PPO epochs per update
+  n_epochs: 2                # PPO epochs per update
   gamma: 0.0                 # discount factor (0 for contextual bandits)
-  ent_coef: 0.1              # entropy coefficient - higher for exploration across sparsity levels
+  ent_coef: 0.05              # entropy coefficient - higher for exploration across sparsity levels
   clip_range: 0.2            # PPO clipping parameter
   max_grad_norm: 0.5
   action_bias: -3.0          # initial bias for action logits (negative = favor not pruning)
-                             # sigmoid(-2) ≈ 0.12, so initial sparsity ~12%
+                             # sigmoid(-3) ≈ 0.05, so initial sparsity ~5%
   
   # Policy network architecture
-  pi_layers: [512, 256]      # actor hidden layers
-  vf_layers: [512, 256]      # critic hidden layers
+  pi_layers: [512]      # actor hidden layers
+  vf_layers: [512]      # critic hidden layers
 
 # -----------------------------------------------------------------------------
 # Training
 # -----------------------------------------------------------------------------
 training:
-  total_timesteps: 10000
-  log_interval: 100
+  total_timesteps: 25000
+  log_interval: 50
   save_path: checkpoints/ppo_pruning_agent
   device: cuda             
   verbose: 1
