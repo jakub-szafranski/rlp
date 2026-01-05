@@ -49,6 +49,7 @@ class LLMPruningEnv(gym.Env):
         max_seq_len: int = 2048,
         quality_weight: float = 0.7,
         device: str = "cuda",
+        baseline_perplexity: Optional[float] = None,
     ):
         super().__init__()
         
@@ -59,6 +60,7 @@ class LLMPruningEnv(gym.Env):
         self.data_source = data_source
         self.device = device
         self.task = task
+        self.baseline_perplexity = baseline_perplexity
         
         # Components based on task
         self.mask_adapter = MaskFunctionAdapter(cluster_names)
@@ -134,9 +136,10 @@ class LLMPruningEnv(gym.Env):
         """
         assert self._current_item is not None, "Call reset() first"
         
-        # Compute baseline on unpruned model
-        if self.task == "perplexity":
-            baseline_ll, word_count = self.metric_calculator.compute(self.model, self._current_item)
+        # Compute baseline on unpruned model only if no baseline_perplexity supplied
+        baseline_ll = None
+        if self.task == "perplexity" and self.baseline_perplexity is None:
+            baseline_ll, _ = self.metric_calculator.compute(self.model, self._current_item)
         
         # Apply pruning
         mask_fn = self.mask_adapter.get_mask_fn(action)
@@ -157,13 +160,20 @@ class LLMPruningEnv(gym.Env):
         
         if self.task == "perplexity":
             pruned_ll, word_count = metric_value
-            
+
             if word_count > 0:
-                # Compute per-doc perplexity for reward
-                baseline_ppl = np.exp(-baseline_ll / word_count)
+                # Compute per-doc perplexity for reward. If a config baseline
+                # is provided, use it directly for speed; otherwise compute
+                # the baseline from the unpruned model's log-likelihood.
+                if self.baseline_perplexity is not None:
+                    baseline_ppl = float(self.baseline_perplexity)
+                    baseline_ll = -word_count * np.log(baseline_ppl)
+                else:
+                    baseline_ppl = np.exp(-baseline_ll / word_count)
+
                 pruned_ppl = np.exp(-pruned_ll / word_count)
                 reward = self.reward_calculator.compute_reward(pruned_ppl, baseline_ppl, sparsity)
-                
+
                 info["perplexity"] = pruned_ppl
                 info["baseline_perplexity"] = baseline_ppl
             else:
@@ -171,7 +181,7 @@ class LLMPruningEnv(gym.Env):
                 reward = 0.0
                 info["perplexity"] = 0.0
                 info["baseline_perplexity"] = 0.0
-            
+
             # Store raw log-likelihood and word_count for proper aggregation
             info["log_likelihood"] = pruned_ll
             info["baseline_log_likelihood"] = baseline_ll

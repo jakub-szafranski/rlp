@@ -39,16 +39,21 @@ class MetricsCallback(BaseCallback):
         # Permanent history of logged aggregates (not overwritten by tqdm)
         # Each entry: dict with step, metric values and sparsity mean
         self.history = []
+        # Count of info entries appended (one per env step/info dict)
+        self.info_count = 0
     
     def _on_training_start(self) -> None:
         """Initialize the progress bar at training start."""
         self.pbar = tqdm(total=self.total_timesteps, desc="Training", unit="step")
     
     def _on_step(self) -> bool:
-        if self.pbar is not None:
-            self.pbar.update(1)
-        
         infos = self.locals.get("infos", [])
+        # Number of environment info dicts received in this callback
+        n_infos = len(infos) if infos is not None else 1
+        if self.pbar is not None:
+            # Update progress bar by number of env steps processed
+            self.pbar.update(n_infos)
+
         for info in infos:
             self.sparsities.append(info["sparsity"])
             if self.task == "perplexity":
@@ -57,8 +62,12 @@ class MetricsCallback(BaseCallback):
                 self.word_counts.append(info.get("word_count", 0))
             else:
                 self.accuracies.append(float(info.get("correct", False)))
-        
-        if self.n_calls % self.log_interval == 0:
+
+        # Increment total number of appended info entries and trigger
+        # logging when we've accumulated `log_interval` env steps.
+        self.info_count += len(infos)
+
+        if self.info_count % self.log_interval == 0:
             recent_sparsity = self.sparsities[-self.log_interval:]
             
             if self.task == "perplexity":
@@ -181,6 +190,7 @@ def create_env(config: dict, models: dict, data_source):
         embed_dim=encoder_conf.get("embed_dim", 768),
         max_seq_len=env_conf.get("max_seq_len", 2048),
         quality_weight=env_conf.get("quality_weight", 0.7),
+        baseline_perplexity=env_conf["baseline_perplexity"],
         device=models["device"],
     )
 

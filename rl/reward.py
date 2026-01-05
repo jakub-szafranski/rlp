@@ -69,22 +69,21 @@ class PerplexityReward(RewardCalculator):
         Returns:
             reward: Float in [-1, 1].
         """
+        max_ppl_ratio = 2.0 # Cap ratio to avoid extreme penalties
+        
+        # Perplexity reward: penalize degradation
+        # ppl_ratio > 0 means pruned is worse (higher ppl)
+        ppl_ratio = (pruned_perplexity - baseline_perplexity) / max(baseline_perplexity, 1e-6)
+        if ppl_ratio > max_ppl_ratio:
+            # Extreme degradation: max negative reward + penalize for sparsity to discourage
+            return -1.0 * self.quality_weight + (1 - self.quality_weight) * (-1*sparsity)
+        
+        ppl_reward = -np.tanh(self.ppl_sensitivity * ppl_ratio)
+        
         # Sparsity reward: higher sparsity = better (bounded by tanh)
         sparsity_reward = np.tanh(self.sparsity_sensitivity * sparsity)
 
-        # Perplexity reward: use log-ratio so the penalty/reward grows
-        # smoothly with multiplicative changes in perplexity and does not
-        # saturate early due to tanh. A pruned model with higher perplexity
-        # yields negative reward; improvements yield positive reward.
-        # We divide by ppl_sensitivity to allow tuning overall scale.
-        safe_baseline = max(baseline_perplexity, 1e-6)
-        ratio = pruned_perplexity / safe_baseline
-        ppl_reward = -np.log(ratio + 1e-12) / max(self.ppl_sensitivity, 1e-12)
-
-        # Combine quality and sparsity. Note: ppl_reward can be unbounded,
-        # but its scale is controlled by ppl_sensitivity. This prevents
-        # early saturation that caused the agent to always see the same
-        # negative quality signal when ratio exceeded ~2.
+        # Weighted combination (both in [-1, 1])
         reward = self.quality_weight * ppl_reward + (1 - self.quality_weight) * sparsity_reward
         return float(reward)
 
