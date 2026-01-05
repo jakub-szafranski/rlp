@@ -198,6 +198,5 @@ class LLMPruningEnv(gym.Env):
         # Single-step episode (contextual bandit)
         terminated = True
         truncated = False
-        print(f"DEBUG: Sparsity: {sparsity:.4f}, PPL ratio: {pruned_ppl / baseline_ppl}, Reward: {reward:.4f}")
         
         return obs, float(reward), terminated, truncated, info
