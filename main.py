@@ -189,13 +189,24 @@ def train(config: dict):
         batch_size=ppo_conf.get("batch_size", 32),
         n_epochs=ppo_conf.get("n_epochs", 4),
         gamma=ppo_conf.get("gamma", 0.0),  # 0 for contextual bandits
-        ent_coef=ppo_conf.get("ent_coef", 0.01),
+        ent_coef=ppo_conf.get("ent_coef", 0.1),
         clip_range=ppo_conf.get("clip_range", 0.2),
         max_grad_norm=ppo_conf.get("max_grad_norm", 0.5),
         policy_kwargs=policy_kwargs,
         verbose=train_conf.get("verbose", 1),
         seed=config.get("random_state", 42),
     )
+    
+    # Initialize action head to favor NOT pruning (lower initial sparsity)
+    # This helps exploration across different sparsity levels instead of always 50%
+    action_bias = ppo_conf.get("action_bias", -2.0)
+    if action_bias != 0.0:
+        with torch.no_grad():
+            action_net = agent.policy.action_net
+            # Scale down weights so bias dominates initial output
+            action_net.weight.data *= 0.01
+            action_net.bias.fill_(action_bias)
+            print(f"  Initialized action bias to {action_bias} (initial prune prob: {torch.sigmoid(torch.tensor(action_bias)).item():.2%})")
     
     print(f"\nStarting training for {train_conf['total_timesteps']} steps...")
     print("=" * 60)
