@@ -1,5 +1,6 @@
 import json
 
+import argparse
 import yaml
 import torch
 import numpy as np
@@ -163,9 +164,10 @@ def train(config: dict):
     print("Creating PPO agent...")
     policy_kwargs = dict(
         net_arch=dict(
-            pi=ppo_conf.get("pi_layers", [256, 256]),
-            vf=ppo_conf.get("vf_layers", [256, 256]),
+            pi=ppo_conf["pi_layers"],
+            vf=ppo_conf["vf_layers"],
         ),
+        activation_fn=torch.nn.GELU,
     )
     
     agent = PPO(
@@ -266,13 +268,17 @@ def evaluate(config: dict):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Run LLM pruning training or evaluation.")
+    parser.add_argument("run_mode", choices=["train", "eval"], help="Mode to run: train or eval")
+    args = parser.parse_args()
+    run_mode = args.run_mode
+
     with open('config.yml') as f:
         config = yaml.safe_load(f)
     
-    run_mode: Literal["train", "evaluate"] = 'train'
     if run_mode == "train":
         train(config)
-    elif run_mode == "evaluate":
+    elif run_mode == "eval":
         evaluate(config)
     else:
-        raise ValueError(f"Unknown run mode: {run_mode}. Use 'train' or 'evaluate'.")
+        raise ValueError(f"Unknown run mode: {run_mode}. Use 'train' or 'eval'.")
