@@ -23,7 +23,7 @@ def load_config(config_path: str = "config.yml") -> dict:
 class MetricsCallback(BaseCallback):
     """Callback for logging metrics during training with tqdm progress bar."""
     
-    def __init__(self, total_timesteps: int, task: str = "perplexity", log_interval: int = 100, verbose: int = 0):
+    def __init__(self, total_timesteps: int, task: str = "perplexity", log_interval: int = 50, verbose: int = 0):
         super().__init__(verbose)
         self.total_timesteps = total_timesteps
         self.task = task
@@ -36,6 +36,9 @@ class MetricsCallback(BaseCallback):
         # For accuracy
         self.accuracies = []
         self.pbar = None
+        # Permanent history of logged aggregates (not overwritten by tqdm)
+        # Each entry: dict with step, metric values and sparsity mean
+        self.history = []
     
     def _on_training_start(self) -> None:
         """Initialize the progress bar at training start."""
@@ -74,8 +77,23 @@ class MetricsCallback(BaseCallback):
                 recent_acc = self.accuracies[-self.log_interval:]
                 metric_str = f"Acc: {np.mean(recent_acc):>6.2%}"
             
+            # Keep the tqdm postfix compact (sparsity only) so the detailed
+            # metric values are not overwritten in place. Also emit a permanent
+            # log line and store to history so past values remain available.
             if self.pbar is not None:
-                self.pbar.set_postfix_str(f"{metric_str} | Sparsity: {np.mean(recent_sparsity):.2%}")
+                self.pbar.set_postfix_str(f"Sparsity: {np.mean(recent_sparsity):.2%}")
+
+            # Permanent log line (prints to stdout and remains in terminal history)
+            print(f"[{self.n_calls}] {metric_str} | Sparsity: {np.mean(recent_sparsity):.2%}")
+
+            # Save aggregate snapshot to history
+            self.history.append(
+                {
+                    "step": int(self.n_calls),
+                    "metric": metric_str,
+                    "sparsity": float(np.mean(recent_sparsity)),
+                }
+            )
         
         return True
     
@@ -231,7 +249,7 @@ def train(config: dict):
     callback = MetricsCallback(
         total_timesteps=train_conf["total_timesteps"],
         task=task, 
-        log_interval=train_conf.get("log_interval", 100)
+        log_interval=train_conf.get("log_interval", 50)
     )
     agent.learn(total_timesteps=train_conf["total_timesteps"], callback=callback)
     
