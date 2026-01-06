@@ -76,7 +76,7 @@ class PerplexityReward(RewardCalculator):
         ppl_ratio = (pruned_perplexity - baseline_perplexity) / max(baseline_perplexity, 1e-6)
         if ppl_ratio > max_ppl_ratio:
             # Extreme degradation: max negative reward + penalize for sparsity to discourage
-            return -5.0 * self.quality_weight - (2.0 * sparsity)
+            return -5.0 * self.quality_weight - (10.0 * sparsity)
         
         ppl_reward = -np.tanh(self.ppl_sensitivity * ppl_ratio)
         

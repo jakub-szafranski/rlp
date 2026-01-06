@@ -61,6 +61,7 @@ class WikiTextDataSource(DataSource):
         self.split = split
         self.max_samples = max_samples
         self._dataset = None
+        self.min_words = 35  # Minimum words to include
     
     def _load(self):
         if self._dataset is None:
@@ -78,6 +79,8 @@ class WikiTextDataSource(DataSource):
             original_text = item["page"]
             detokenized_text = wikitext_detokenizer(original_text)
             word_count = len(re.split(r"\s+", original_text))
+            if word_count < self.min_words:
+                continue
             yield {
                 "text": detokenized_text,
                 "original_text": original_text,
