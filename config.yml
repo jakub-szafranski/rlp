@@ -56,7 +56,7 @@ data:
 # -----------------------------------------------------------------------------
 environment:
   max_seq_len: 2048          # max tokens for perplexity calculation
-  quality_weight: 0.6        # weight for quality (ppl/acc) vs sparsity reward
+  quality_weight: 0.5        # weight for quality (ppl/acc) vs sparsity reward
   baseline_perplexity: 9.57  # optional: if set, use this constant baseline for speed
 
 # -----------------------------------------------------------------------------
@@ -71,8 +71,8 @@ ppo:
   ent_coef: 0.01              # entropy coefficient - higher for exploration across sparsity levels
   clip_range: 0.2            # PPO clipping parameter
   max_grad_norm: 0.5
-  action_bias: -2.5          # initial bias for action logits (negative = favor not pruning)
-                             # sigmoid(-3) ≈ 0.05, so initial sparsity ~5%
+  action_bias: -2.0          # initial bias for action logits (negative = favor not pruning)
+                             # sigmoid(-2.5) ≈ 0.08, so initial sparsity ~8%
   
   # Policy network architecture
   pi_layers: [512]      # actor hidden layers
