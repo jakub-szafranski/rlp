@@ -48,7 +48,7 @@ encoder:
 # -----------------------------------------------------------------------------
 data:
   dataset: wikitext          # wikitext or mmlu
-  train_samples: 10000       # max samples for training (null for all)
+  train_samples: null       # max samples for training (null for all)
   mmlu_subjects: null    # list of subjects or null for all (only for mmlu)
 
 # -----------------------------------------------------------------------------
@@ -56,7 +56,7 @@ data:
 # -----------------------------------------------------------------------------
 environment:
   max_seq_len: 2048          # max tokens for perplexity calculation
-  quality_weight: 0.8        # weight for quality (ppl/acc) vs sparsity reward
+  quality_weight: 0.6        # weight for quality (ppl/acc) vs sparsity reward
   baseline_perplexity: 9.57  # optional: if set, use this constant baseline for speed
 
 # -----------------------------------------------------------------------------
@@ -68,8 +68,8 @@ ppo:
   batch_size: 64
   n_epochs: 2                # PPO epochs per update
   gamma: 0.0                 # discount factor (0 for contextual bandits)
-  ent_coef: 0.005              # entropy coefficient - higher for exploration across sparsity levels
-  clip_range: 0.1            # PPO clipping parameter
+  ent_coef: 0.01              # entropy coefficient - higher for exploration across sparsity levels
+  clip_range: 0.2            # PPO clipping parameter
   max_grad_norm: 0.5
   action_bias: -3.0          # initial bias for action logits (negative = favor not pruning)
                              # sigmoid(-3) ≈ 0.05, so initial sparsity ~5%

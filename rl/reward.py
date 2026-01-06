@@ -39,7 +39,7 @@ class PerplexityReward(RewardCalculator):
     - Final reward in [-1, 1] (better for PPO value function)
     """
     
-    def __init__(self, quality_weight: float = 0.7, ppl_sensitivity: float = 3.0, sparsity_sensitivity: float = 3.0):
+    def __init__(self, quality_weight: float = 0.7, ppl_sensitivity: float = 1.5, sparsity_sensitivity: float = 3.0):
         """
         Args:
             quality_weight: Weight for perplexity term (0-1).
