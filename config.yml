@@ -63,13 +63,13 @@ environment:
 # PPO Hyperparameters
 # -----------------------------------------------------------------------------
 ppo:
-  learning_rate: 3.0e-4
-  n_steps: 128                # steps per rollout before update
-  batch_size: 32
+  learning_rate: 5.0e-5
+  n_steps: 256                # steps per rollout before update
+  batch_size: 64
   n_epochs: 2                # PPO epochs per update
   gamma: 0.0                 # discount factor (0 for contextual bandits)
-  ent_coef: 0.05              # entropy coefficient - higher for exploration across sparsity levels
-  clip_range: 0.2            # PPO clipping parameter
+  ent_coef: 0.005              # entropy coefficient - higher for exploration across sparsity levels
+  clip_range: 0.1            # PPO clipping parameter
   max_grad_norm: 0.5
   action_bias: -3.0          # initial bias for action logits (negative = favor not pruning)
                              # sigmoid(-3) ≈ 0.05, so initial sparsity ~5%
