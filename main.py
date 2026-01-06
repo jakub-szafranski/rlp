@@ -282,7 +282,7 @@ def train(config: dict):
         with torch.no_grad():
             action_net = agent.policy.action_net
             # Scale down weights so bias dominates initial output
-            action_net.weight.data *= 0.01
+            action_net.weight.data *= 0.5
             action_net.bias.fill_(action_bias)
             print(f"  Initialized action bias to {action_bias} (initial prune prob: {torch.sigmoid(torch.tensor(action_bias)).item():.2%})")
     
