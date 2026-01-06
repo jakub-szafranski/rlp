@@ -29,7 +29,8 @@ class UndoPack(BaseModel):
     storage: Literal["cpu", "gpu"] = "cpu"
     dims: Dims
     layers: Dict[int, LayerUndoEntry] = Field(default_factory=dict)
-    sparsity: float = 0.0  # Fraction of neurons pruned (0-1)
+    sparsity: float = 0.0     # Fraction of model parameters pruned (0-1). 
+
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -58,9 +59,11 @@ def prune_with_undo_pack(
 
     pin_ok = torch.cuda.is_available()
     
-    # Track sparsity
+    # Track parameter-level sparsity across the whole model
     total_neurons = 0
     pruned_neurons = 0
+    total_model_params = sum(int(p.numel()) for p in model.parameters())
+    pruned_params = 0
 
     for layer_idx, layer in enumerate(model.model.layers):
         mlp = layer.mlp
@@ -94,6 +97,9 @@ def prune_with_undo_pack(
         up_removed   = up_w[remove,   :].contiguous()
         down_removed = down_w[:, remove].contiguous()
 
+        # Parameter-level accounting for this layer (counts of removed params)
+        pruned_params += int(gate_removed.numel() + up_removed.numel() + down_removed.numel())
+
         keep_idx = _cpu_int(torch.nonzero(keep).view(-1))
         rem_idx  = _cpu_int(torch.nonzero(remove).view(-1))
 
@@ -123,8 +129,8 @@ def prune_with_undo_pack(
 
         pack.layers[layer_idx] = entry
     
-    # Compute sparsity ratio
-    pack.sparsity = pruned_neurons / total_neurons if total_neurons > 0 else 0.0
+    # Compute parameter-level sparsity across the whole model and store
+    pack.sparsity = pruned_params / total_model_params if total_model_params > 0 else 0.0
 
     return pack
 
