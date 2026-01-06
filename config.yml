@@ -56,7 +56,7 @@ data:
 # -----------------------------------------------------------------------------
 environment:
   max_seq_len: 2048          # max tokens for perplexity calculation
-  quality_weight: 0.5        # weight for quality (ppl/acc) vs sparsity reward
+  quality_weight: 0.3        # weight for quality (ppl/acc) vs sparsity reward
   baseline_perplexity: 9.57  # optional: if set, use this constant baseline for speed
 
 # -----------------------------------------------------------------------------
@@ -64,7 +64,7 @@ environment:
 # -----------------------------------------------------------------------------
 ppo:
   learning_rate: 5.0e-5
-  n_steps: 256                # steps per rollout before update
+  n_steps: 128                # steps per rollout before update
   batch_size: 64
   n_epochs: 2                # PPO epochs per update
   gamma: 0.0                 # discount factor (0 for contextual bandits)
@@ -82,7 +82,7 @@ ppo:
 # Training
 # -----------------------------------------------------------------------------
 training:
-  total_timesteps: 25000
+  total_timesteps: 5000
   log_interval: 50
   save_path: checkpoints/ppo_pruning_agent
   device: cuda             
