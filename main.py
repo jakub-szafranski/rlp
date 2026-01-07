@@ -340,6 +340,9 @@ def evaluate(config: dict):
             results["perplexity"].append(info["perplexity"])
         else:
             results["correct"].append(info["correct"])
+        
+        if terminated:
+            obs, _ = env.reset()
     
     print("\n" + "=" * 60)
     print("EVALUATION RESULTS")
