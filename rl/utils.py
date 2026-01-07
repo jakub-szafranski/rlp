@@ -4,44 +4,35 @@ import torch
 from pruning import PrunableLLM, get_pruning_mask
 
 
-class MaskFunctionAdapter:
+class FractionMaskAdapter:
     """
-    Adapts action (binary cluster vector) to mask_fn for PrunableLLM.
+    Adapts action (fraction vector) to mask_fn for PrunableLLM.
     
-    Maps: action[cluster_idx] = 1 means "prune this cluster"
+    Maps: action[layer_idx] = fraction to prune (0-1)
           -> mask_fn(layer_idx) returns boolean tensor (True = KEEP)
     """
     
-    def __init__(self, cluster_names: list[str]):
-        """
-        Args:
-            cluster_names: List of all cluster names in order matching action indices
-        """
-        self.cluster_names = cluster_names
+    def __init__(self):
+        pass
     
     def get_mask_fn(self, action: np.ndarray) -> Callable[[int], torch.Tensor]:
         """
-        Create a mask_fn from binary action vector.
+        Create a mask_fn from fraction action vector.
         
         Args:
-            action: Binary array of shape (num_clusters,) where 1 = prune
+            action: Float array of shape (32,) with fractions 0-1
             
         Returns:
             mask_fn(layer_idx) -> torch.Tensor of shape (intermediate_size,) 
                                   where True = keep, False = prune
         """
-        if action.shape[0] != len(self.cluster_names):
-            raise ValueError("Action length does not match number of clusters.")
-        
-        clusters_to_prune = [
-            self.cluster_names[i] 
-            for i in range(len(action)) 
-            if action[i] == 1
-        ]
+        if action.shape[0] != 32:
+            raise ValueError("Action must be length 32 for 32 layers.")
 
         def mask_fn(layer_idx: int) -> torch.Tensor:
+            fraction = action[layer_idx]
             layer_str = str(layer_idx)
-            mask = get_pruning_mask(clusters_to_prune, layer_str)
+            mask = get_pruning_mask(fraction, layer_str)
             return torch.from_numpy(mask).bool()
         
         return mask_fn

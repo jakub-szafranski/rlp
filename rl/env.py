@@ -6,7 +6,7 @@ import numpy as np
 import torch
 
 from pruning import PrunableLLM
-from rl.utils import MaskFunctionAdapter
+from rl.utils import FractionMaskAdapter
 from rl.metrics import PerplexityCalculator, MMLULoglikelihoodCalculator
 from rl.reward import PerplexityReward, CorrectnessReward
 
@@ -43,7 +43,6 @@ class LLMPruningEnv(gym.Env):
         encoder,
         encoder_tokenizer,
         data_source,
-        cluster_names: list[str],
         task: Literal["perplexity", "correctness"] = "perplexity",
         embed_dim: int = 768,
         max_seq_len: int = 2048,
@@ -63,7 +62,7 @@ class LLMPruningEnv(gym.Env):
         self.baseline_perplexity = baseline_perplexity
         
         # Components based on task
-        self.mask_adapter = MaskFunctionAdapter(cluster_names)
+        self.mask_adapter = FractionMaskAdapter()
         
         if task == "perplexity":
             self.metric_calculator = PerplexityCalculator(llm_tokenizer, max_seq_len)
@@ -73,8 +72,9 @@ class LLMPruningEnv(gym.Env):
             self.reward_calculator = CorrectnessReward(quality_weight=quality_weight)
         
         # Spaces
-        self.num_clusters = len(cluster_names)
-        self.action_space = spaces.MultiBinary(self.num_clusters)
+        self.action_space = spaces.Box(
+            low=0.0, high=1.0, shape=(32,), dtype=np.float32
+        )
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, shape=(embed_dim,), dtype=np.float32
         )
@@ -155,7 +155,7 @@ class LLMPruningEnv(gym.Env):
         # Build info dict and compute reward
         info = {
             "sparsity": sparsity,
-            "num_clusters_pruned": int(action.sum()),
+            "mean_fraction_pruned": float(action.mean()),
         }
         
         if self.task == "perplexity":

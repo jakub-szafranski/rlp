@@ -164,7 +164,7 @@ def create_data_source(config: dict, split: str, max_samples: int | None = None)
 
 
 def load_models(config: dict):
-    """Load LLM, encoder, and cluster config."""
+    """Load LLM, encoder."""
     model_conf = config["model"]
     encoder_conf = config["encoder"]
     train_conf = config["training"]
@@ -186,19 +186,11 @@ def load_models(config: dict):
         p.requires_grad = False
     encoder_tokenizer = AutoTokenizer.from_pretrained(encoder_conf["name"])
     
-    cluster_mapping_path = config["clusters"]["mapping_path"]
-    print(f"Loading clusters from: {cluster_mapping_path}...")
-    with open(cluster_mapping_path) as f:
-        cluster_mapping = json.load(f)
-    cluster_names = list(cluster_mapping.keys())
-    print(f"  Loaded {len(cluster_names)} clusters")
-    
     return {
         "prunable_llm": prunable_llm,
         "llm_tokenizer": llm_tokenizer,
         "encoder": encoder,
         "encoder_tokenizer": encoder_tokenizer,
-        "cluster_names": cluster_names,
         "device": device,
     }
 
@@ -219,7 +211,6 @@ def create_env(config: dict, models: dict, data_source):
         encoder=models["encoder"],
         encoder_tokenizer=models["encoder_tokenizer"],
         data_source=data_source,
-        cluster_names=models["cluster_names"],
         task=task,
         embed_dim=encoder_conf.get("embed_dim", 768),
         max_seq_len=env_conf.get("max_seq_len", 2048),
@@ -282,9 +273,9 @@ def train(config: dict):
         with torch.no_grad():
             action_net = agent.policy.action_net
             # Scale down weights so bias dominates initial output
-            action_net.weight.data *= 0.5
+            # action_net.weight.data *= 0.5
             action_net.bias.fill_(action_bias)
-            print(f"  Initialized action bias to {action_bias} (initial prune prob: {torch.sigmoid(torch.tensor(action_bias)).item():.2%})")
+            print(f"  Initialized action bias to {action_bias} (initial mean fraction: {action_bias})")
     
     print(f"\nStarting training for {train_conf['total_timesteps']} steps...")
     print("=" * 60)
@@ -330,7 +321,7 @@ def evaluate(config: dict):
     
     deterministic = eval_conf.get("deterministic", True)
     
-    results = {"sparsity": [], "reward": [], "clusters_pruned": []}
+    results = {"sparsity": [], "reward": [], "mean_fraction_pruned": []}
     if task == "perplexity":
         results["perplexity"] = []
     else:
@@ -343,15 +334,12 @@ def evaluate(config: dict):
         
         results["sparsity"].append(info["sparsity"])
         results["reward"].append(reward)
-        results["clusters_pruned"].append(info["num_clusters_pruned"])
+        results["mean_fraction_pruned"].append(info["mean_fraction_pruned"])
         
         if task == "perplexity":
             results["perplexity"].append(info["perplexity"])
         else:
             results["correct"].append(info["correct"])
-        
-        if terminated:
-            obs, _ = env.reset()
     
     print("\n" + "=" * 60)
     print("EVALUATION RESULTS")
@@ -365,7 +353,7 @@ def evaluate(config: dict):
     
     print(f"Mean Sparsity:        {np.mean(results['sparsity']):>10.2%} ± {np.std(results['sparsity']):>8.2%}")
     print(f"Mean Reward:          {np.mean(results['reward']):>10.4f} ± {np.std(results['reward']):>8.4f}")
-    print(f"Mean Clusters Pruned: {np.mean(results['clusters_pruned']):>10.1f} / {len(models['cluster_names'])}")
+    print(f"Mean Fraction Pruned: {np.mean(results['mean_fraction_pruned']):>10.2%} ± {np.std(results['mean_fraction_pruned']):>8.2%}")
     print("=" * 60)
     
     return results

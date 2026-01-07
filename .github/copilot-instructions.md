@@ -156,3 +156,5 @@
 
 ### Personal preferences
 - I like clean code, short code, fast and vectorized code.
+- to run things use: python3 <file_name>.py
+- always do at the beggining conda activate llm_pruning
