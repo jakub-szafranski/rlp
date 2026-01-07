@@ -6,7 +6,7 @@ import torch
 import numpy as np
 from tqdm import tqdm
 from typing import Literal
-from stable_baselines3 import PPO
+from stable_baselines3 import SAC
 from stable_baselines3.common.callbacks import BaseCallback
 from transformers import AutoModelForCausalLM, AutoTokenizer, AutoModel
 
@@ -221,9 +221,9 @@ def create_env(config: dict, models: dict, data_source):
 
 
 def train(config: dict):
-    """Train PPO agent."""
+    """Train SAC agent."""
     data_conf = config["data"]
-    ppo_conf = config["ppo"]
+    sac_conf = config["sac"]
     train_conf = config["training"]
     
     dataset = data_conf["dataset"].lower()
@@ -241,41 +241,31 @@ def train(config: dict):
     print("Creating environment...")
     env = create_env(config, models, train_data)
     
-    print("Creating PPO agent...")
+    print("Creating SAC agent...")
     policy_kwargs = dict(
         net_arch=dict(
-            pi=ppo_conf["pi_layers"],
-            vf=ppo_conf["vf_layers"],
+            pi=sac_conf["pi_layers"],
+            qf=sac_conf["qf_layers"],
         ),
         activation_fn=torch.nn.GELU,
     )
     
-    agent = PPO(
+    agent = SAC(
         "MlpPolicy",
         env,
-        learning_rate=ppo_conf.get("learning_rate", 3e-4),
-        n_steps=ppo_conf.get("n_steps", 64),
-        batch_size=ppo_conf.get("batch_size", 32),
-        n_epochs=ppo_conf.get("n_epochs", 4),
-        gamma=ppo_conf.get("gamma", 0.0),  # 0 for contextual bandits
-        ent_coef=ppo_conf.get("ent_coef", 0.1),
-        clip_range=ppo_conf.get("clip_range", 0.2),
-        max_grad_norm=ppo_conf.get("max_grad_norm", 0.5),
+        learning_rate=sac_conf.get("learning_rate", 3e-4),
+        buffer_size=sac_conf.get("buffer_size", 100000),
+        batch_size=sac_conf.get("batch_size", 256),
+        tau=sac_conf.get("tau", 0.005),
+        gamma=sac_conf.get("gamma", 0.99),
+        train_freq=sac_conf.get("train_freq", 1),
+        gradient_steps=sac_conf.get("gradient_steps", 1),
+        ent_coef=sac_conf.get("ent_coef", "auto"),
+        target_update_interval=sac_conf.get("target_update_interval", 1),
         policy_kwargs=policy_kwargs,
         verbose=train_conf.get("verbose", 1),
         seed=config.get("random_state", 42),
     )
-    
-    # Initialize action head to favor NOT pruning (lower initial sparsity)
-    # This helps exploration across different sparsity levels instead of always 50%
-    action_bias = ppo_conf.get("action_bias", -2.0)
-    if action_bias != 0.0:
-        with torch.no_grad():
-            action_net = agent.policy.action_net
-            # Scale down weights so bias dominates initial output
-            # action_net.weight.data *= 0.5
-            action_net.bias.fill_(action_bias)
-            print(f"  Initialized action bias to {action_bias} (initial mean fraction: {action_bias})")
     
     print(f"\nStarting training for {train_conf['total_timesteps']} steps...")
     print("=" * 60)
@@ -314,7 +304,7 @@ def evaluate(config: dict):
     
     load_path = train_conf.get("save_path", "ppo_pruning_agent")
     print(f"Loading agent from: {load_path}...")
-    agent = PPO.load(load_path, env=env)
+    agent = SAC.load(load_path, env=env)
     
     print(f"\nEvaluating on {len(test_data)} test samples...")
     print("=" * 60)

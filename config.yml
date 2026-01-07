@@ -59,22 +59,22 @@ environment:
   baseline_perplexity: 9.57  # optional: if set, use this constant baseline for speed
 
 # -----------------------------------------------------------------------------
-# PPO Hyperparameters
+# SAC Hyperparameters
 # -----------------------------------------------------------------------------
-ppo:
+sac:
   learning_rate: 5.0e-5
-  n_steps: 128                # steps per rollout before update
+  buffer_size: 100000
   batch_size: 64
-  n_epochs: 3                # PPO epochs per update
+  tau: 0.005
   gamma: 0.0                 # discount factor (0 for contextual bandits)
-  ent_coef: 0.02              # entropy coefficient - higher for exploration across sparsity levels
-  clip_range: 0.2            # PPO clipping parameter
-  max_grad_norm: 0.5
-  action_bias: 0.1          # initial mean for continuous actions (low pruning fraction)
+  train_freq: 1
+  gradient_steps: 1
+  ent_coef: 'auto'
+  target_update_interval: 1
   
   # Policy network architecture
   pi_layers: [512]      # actor hidden layers
-  vf_layers: [512]      # critic hidden layers
+  qf_layers: [512]      # critic hidden layers
 
 # -----------------------------------------------------------------------------
 # Training
