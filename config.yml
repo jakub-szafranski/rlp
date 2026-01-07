@@ -71,7 +71,7 @@ sac:
   gradient_steps: 4
   ent_coef: 'auto'
   target_update_interval: 1
-  action_bias: 0.01            # initial bias for action mean (fraction to prune per layer)
+  action_bias: 0.05            # initial bias for action mean (fraction to prune per layer)
 
   pi_layers: [512, 256]       
   qf_layers: [512, 256]

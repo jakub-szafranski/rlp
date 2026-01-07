@@ -269,12 +269,12 @@ def train(config: dict):
     
     # Initialize action head to favor NOT pruning (lower initial sparsity)
     # This helps exploration across different sparsity levels instead of always 50%
-    action_bias = sac_conf.get("action_bias", 0.1)
+    action_bias = sac_conf.get("action_bias", 0.05)
     if action_bias != 0.0:
         with torch.no_grad():
             action_net = agent.policy.actor.mu
             # Scale down weights so bias dominates initial output
-            action_net.weight.data *= 0.1
+            action_net.weight.data *= 0.01
             action_net.bias.fill_(action_bias)
             print(f"  Initialized action bias to {action_bias} (initial mean fraction: {action_bias})")
 
