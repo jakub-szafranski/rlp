@@ -275,7 +275,7 @@ def train(config: dict):
             action_net = agent.policy.actor.mu
             # Compute the bias for the pre-tanh mean to achieve desired initial action
             desired_action = action_bias
-            pre_tanh_bias = torch.atanh(2 * desired_action - 1)
+            pre_tanh_bias = torch.atanh(torch.tensor(2 * desired_action - 1))
             # Scale down weights to small values so bias dominates initially, but allow updates
             action_net.weight.data *= 0.01
             action_net.bias.fill_(pre_tanh_bias)
