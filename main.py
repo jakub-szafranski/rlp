@@ -273,10 +273,13 @@ def train(config: dict):
     if action_bias != 0.0:
         with torch.no_grad():
             action_net = agent.policy.actor.mu
-            # Scale down weights so bias dominates initial output
+            # Compute the bias for the pre-tanh mean to achieve desired initial action
+            desired_action = action_bias
+            pre_tanh_bias = torch.atanh(2 * desired_action - 1)
+            # Scale down weights to small values so bias dominates initially, but allow updates
             action_net.weight.data *= 0.01
-            action_net.bias.fill_(action_bias)
-            print(f"  Initialized action bias to {action_bias} (initial mean fraction: {action_bias})")
+            action_net.bias.fill_(pre_tanh_bias)
+            print(f"  Initialized action bias to {pre_tanh_bias:.4f} (initial mean fraction: {desired_action})")
 
 
     
