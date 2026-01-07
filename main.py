@@ -272,7 +272,7 @@ def train(config: dict):
     action_bias = sac_conf.get("action_bias", 0.1)
     if action_bias != 0.0:
         with torch.no_grad():
-            action_net = agent.policy.action_net
+            action_net = agent.policy.actor.mu
             # Scale down weights so bias dominates initial output
             action_net.weight.data *= 0.5
             action_net.bias.fill_(action_bias)
