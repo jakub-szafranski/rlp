@@ -1,12 +1,12 @@
 # Copilot Instructions for this Repo
 
 ## Project overview
-- **Goal**: Train a PPO agent to learn pruning policies for a large language model (LLaMA 3.1 8B Instruct) based on precomputed neuron clusters, trading off quality (perplexity/accuracy) against sparsity.
+- **Goal**: Train a SAC agent to learn pruning policies for a large language model (LLaMA 3.1 8B Instruct) based on precomputed neuron importance scores, trading off quality (perplexity/accuracy) against sparsity.
 - **Core idea**: Treat pruning as a contextual bandit RL problem. Each episode:
   - Sample a text example from WikiText (perplexity) or MMLU (multiple-choice correctness).
   - Encode the text into a fixed-size embedding (ModernBERT).
-  - The PPO agent outputs a binary mask over clusters (which clusters to prune).
-  - The environment prunes the model according to this mask, evaluates quality, restores the model, and returns a reward combining quality and sparsity.
+  - The SAC agent outputs continuous fractions (0-1) for each of the 32 layers, indicating what fraction of neurons to prune in that layer.
+  - The environment prunes the model according to these fractions (keeping the most important neurons), evaluates quality, restores the model, and returns a reward combining quality and sparsity.
 
 ## High-level architecture
 - `main.py`
@@ -19,9 +19,8 @@
       - HF causal LLM (`AutoModelForCausalLM`) and tokenizer.
       - HF encoder (`AutoModel`) and tokenizer.
       - Wraps LLM in `PrunableLLM`.
-      - Loads cluster mapping JSON to get cluster names.
     - `create_env(config, models, data_source)` – builds `LLMPruningEnv` with task type inferred from dataset.
-    - `train(config)` – wires everything together and runs PPO training with `stable_baselines3.PPO`.
+    - `train(config)` – wires everything together and runs SAC training with `stable_baselines3.SAC`.
     - `evaluate(config)` – loads a saved agent and runs evaluation loop over test split.
   - Uses `MetricsCallback` (tqdm-based) to log progress, sparsity and metric (perplexity/accuracy) during training.
 
@@ -36,9 +35,9 @@
       - `.is_pruned` – whether model is currently pruned.
 
   - `create_pruning_mask.py`:
-    - Loads precomputed masks and cluster↔layer mapping from JSON files.
-    - `get_pruning_mask(clusters_to_prune, layer)` – returns a NumPy 1D mask for a given layer based on selected clusters.
-    - Used indirectly via RL utilities to convert cluster actions into per-layer neuron masks.
+    - Loads precomputed neuron importance scores (sorted indices) from JSON file.
+    - `get_pruning_mask(fraction, layer)` – returns a NumPy 1D mask for a given layer based on the pruning fraction (keeps top (1-fraction) most important neurons).
+    - Used indirectly via RL utilities to convert fraction actions into per-layer neuron masks.
 
   - `utils.py`:
     - Defines the low-level pruning machinery:
@@ -49,11 +48,11 @@
 - `rl/`
   - `env.py` – `LLMPruningEnv` (Gymnasium env):
     - **Observation**: embedding of current text example from encoder.
-    - **Action**: `MultiBinary(num_clusters)` – binary mask over cluster names.
+    - **Action**: `Box(0, 1, (32,))` – continuous fractions for each of the 32 layers.
     - **Reward**: computed from either perplexity change (WikiText) or correctness (MMLU) plus sparsity.
     - Flow in `step(action)`:
       1. Optionally compute baseline perplexity on the unpruned model (for WikiText).
-      2. Build a `mask_fn` from the binary action using `MaskFunctionAdapter`.
+      2. Build a `mask_fn` from the fraction action using `FractionMaskAdapter`.
       3. Call `model.prune(mask_fn, storage='gpu')`.
       4. Compute metric using `self.metric_calculator.compute`.
       5. Read sparsity from `model.sparsity`.
@@ -89,14 +88,14 @@
       - Combines ±1 correctness signal with sparsity-based reward.
 
   - `utils.py` (RL):
-    - `MaskFunctionAdapter` (not shown here, but used by the env) converts a cluster-level binary action into the `mask_fn(layer_idx) -> bool tensor` expected by `PrunableLLM.prune`.
+    - `FractionMaskAdapter` converts a layer-wise fraction action into the `mask_fn(layer_idx) -> bool tensor` expected by `PrunableLLM.prune`.
 
 - `grouping_statistics/` & JSONs
-  - Hold clustering/grouping artifacts (e.g., `cluster_layer_mapping_up_2l_16c.json`, `cluster_masks_up_2l_16c.json`).
-  - These describe which neurons (per layer) belong to which high-level clusters.
+  - Hold activation data and importance scores (e.g., `neuron_importance_up_proj.json`).
+  - Precomputed by sorting neurons in each layer by mean activation across 100 text samples.
 
 - `playground/`
-  - Jupyter notebooks and experiments (perplexity measurements, spectral clustering, RL tests, etc.).
+  - Jupyter notebooks and experiments (activation computation, importance sorting, etc.).
   - Not part of the main training pipeline, but useful for ad‑hoc analysis.
 
 ## How to run
@@ -104,13 +103,13 @@
   - Entry: `main.py`, function `train`.
   - CLI usage:
     - `python main.py train`
-  - Uses `config.yml` to configure model name, encoder, data, PPO, etc.
+  - Uses `config.yml` to configure model name, encoder, data, SAC, etc.
 
 - Evaluation:
   - Entry: `main.py`, function `evaluate`.
   - CLI usage:
     - `python main.py eval`
-  - Expects a trained PPO checkpoint at `training.save_path` from `config.yml`.
+  - Expects a trained SAC checkpoint at `training.save_path` from `config.yml`.
 
 ## Important conventions / expectations for Copilot
 
@@ -139,7 +138,7 @@
 - All experiment-level choices should go through `config.yml` where possible:
   - Model/encoder names and dtypes.
   - Dataset selection and sample counts.
-  - PPO hyperparameters and network architectures.
+  - SAC hyperparameters and network architectures.
   - Environment hyperparameters (max seq length, quality vs sparsity weight).
 - When adding new options, prefer to:
   - Add them to `config.yml` with comments.
@@ -158,3 +157,4 @@
 - I like clean code, short code, fast and vectorized code.
 - to run things use: python3 <file_name>.py
 - always do at the beggining conda activate llm_pruning
+- 

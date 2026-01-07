@@ -267,6 +267,19 @@ def train(config: dict):
         seed=config.get("random_state", 42),
     )
     
+    # Initialize action head to favor NOT pruning (lower initial sparsity)
+    # This helps exploration across different sparsity levels instead of always 50%
+    action_bias = sac_conf.get("action_bias", 0.1)
+    if action_bias != 0.0:
+        with torch.no_grad():
+            action_net = agent.policy.action_net
+            # Scale down weights so bias dominates initial output
+            action_net.weight.data *= 0.5
+            action_net.bias.fill_(action_bias)
+            print(f"  Initialized action bias to {action_bias} (initial mean fraction: {action_bias})")
+
+
+    
     print(f"\nStarting training for {train_conf['total_timesteps']} steps...")
     print("=" * 60)
     
