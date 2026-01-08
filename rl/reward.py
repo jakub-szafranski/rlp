@@ -70,20 +70,25 @@ class PerplexityReward(RewardCalculator):
             reward: Float in [-1, 1].
         """
         max_ppl_ratio = 0.5 # Cap ratio to avoid extreme penalties
+        max_sparsity = 0.3   # Cap sparsity for reward scaling
+
+        min_sparsity = 0.1  # Minimum sparsity to get bonus
+        sparsity_bonus = 0.5  # Small bonus for any pruning
         
         # Perplexity reward: penalize degradation
         # ppl_ratio > 0 means pruned is worse (higher ppl)
         ppl_ratio = (pruned_perplexity - baseline_perplexity) / max(baseline_perplexity, 1e-6)
         ppl_ratio = np.clip(ppl_ratio, 0, 1)
-        if ppl_ratio > max_ppl_ratio:
+        if ppl_ratio >= max_ppl_ratio or sparsity >= max_sparsity:
             return np.clip(-(10.0 * sparsity), -2.5, -1)
         
-        ppl_reward = -5 * ppl_ratio**2
+        ppl_reward = -6 * ppl_ratio**2
         
         # Sparsity reward: higher sparsity = better (bounded by tanh)
         sparsity_reward = np.tanh(self.sparsity_sensitivity * sparsity)
 
-        reward = self.quality_weight * ppl_reward + (1 - self.quality_weight) * sparsity_reward
+        reward = self.quality_weight * ppl_reward + (2 - self.quality_weight) * sparsity_reward
+        reward += sparsity_bonus if sparsity >= min_sparsity else 0.0
         return np.clip(float(reward), -2.0, 2.0)
 
 
