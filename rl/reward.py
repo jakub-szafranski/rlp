@@ -69,23 +69,22 @@ class PerplexityReward(RewardCalculator):
         Returns:
             reward: Float in [-1, 1].
         """
-        max_ppl_ratio = 2.0 # Cap ratio to avoid extreme penalties
+        max_ppl_ratio = 0.5 # Cap ratio to avoid extreme penalties
         
         # Perplexity reward: penalize degradation
         # ppl_ratio > 0 means pruned is worse (higher ppl)
         ppl_ratio = (pruned_perplexity - baseline_perplexity) / max(baseline_perplexity, 1e-6)
+        ppl_ratio = np.clip(ppl_ratio, 0, 1)
         if ppl_ratio > max_ppl_ratio:
-            # Extreme degradation: max negative reward + penalize for sparsity to discourage
-            return -2.0 * self.quality_weight - (10.0 * sparsity)
+            return np.clip(-(10.0 * sparsity), -2.5, -1)
         
-        ppl_reward = -np.tanh(self.ppl_sensitivity * ppl_ratio)
+        ppl_reward = -5 * ppl_ratio**2
         
         # Sparsity reward: higher sparsity = better (bounded by tanh)
         sparsity_reward = np.tanh(self.sparsity_sensitivity * sparsity)
 
-        # Weighted combination (both in [-1, 1])
         reward = self.quality_weight * ppl_reward + (1 - self.quality_weight) * sparsity_reward
-        return float(reward)
+        return np.clip(float(reward), -2.0, 2.0)
 
 
 class CorrectnessReward(RewardCalculator):

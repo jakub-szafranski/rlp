@@ -67,7 +67,7 @@ td3:
   batch_size: 128              # Better for continuous control
   tau: 0.005                   # Target network update rate
   gamma: 0.0                   # Still 0 for Contextual Bandit
-  train_freq: 1
+  train_freq: 2
   gradient_steps: 5            # High to extract more info per LLM eval
   
   # TD3 Specifics
