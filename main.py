@@ -6,7 +6,7 @@ import torch
 import numpy as np
 from tqdm import tqdm
 from typing import Literal
-from stable_baselines3 import SAC
+from stable_baselines3 import TD3
 from stable_baselines3.common.callbacks import BaseCallback
 from transformers import AutoModelForCausalLM, AutoTokenizer, AutoModel
 
@@ -221,9 +221,9 @@ def create_env(config: dict, models: dict, data_source):
 
 
 def train(config: dict):
-    """Train SAC agent."""
+    """Train TD3 agent."""
     data_conf = config["data"]
-    sac_conf = config["sac"]
+    td3_conf = config["td3"]
     train_conf = config["training"]
     
     dataset = data_conf["dataset"].lower()
@@ -241,27 +241,28 @@ def train(config: dict):
     print("Creating environment...")
     env = create_env(config, models, train_data)
     
-    print("Creating SAC agent...")
+    print("Creating TD3 agent...")
     policy_kwargs = dict(
         net_arch=dict(
-            pi=sac_conf["pi_layers"],
-            qf=sac_conf["qf_layers"],
+            pi=td3_conf["pi_layers"],
+            qf=td3_conf["qf_layers"],
         ),
         activation_fn=torch.nn.GELU,
     )
     
-    agent = SAC(
+    agent = TD3(
         "MlpPolicy",
         env,
-        learning_rate=sac_conf.get("learning_rate", 3e-4),
-        buffer_size=sac_conf.get("buffer_size", 100000),
-        batch_size=sac_conf.get("batch_size", 256),
-        tau=sac_conf.get("tau", 0.005),
-        gamma=sac_conf.get("gamma", 0.99),
-        train_freq=sac_conf.get("train_freq", 1),
-        gradient_steps=sac_conf.get("gradient_steps", 1),
-        ent_coef=sac_conf.get("ent_coef", "auto"),
-        target_update_interval=sac_conf.get("target_update_interval", 1),
+        learning_rate=td3_conf.get("learning_rate", 1e-4),
+        buffer_size=td3_conf.get("buffer_size", 10000),
+        batch_size=td3_conf.get("batch_size", 256),
+        tau=td3_conf.get("tau", 0.005),
+        gamma=td3_conf.get("gamma", 0.0),
+        train_freq=td3_conf.get("train_freq", 1),
+        gradient_steps=td3_conf.get("gradient_steps", 5),
+        policy_delay=td3_conf.get("policy_delay", 2),
+        target_policy_noise=td3_conf.get("target_policy_noise", 0.2),
+        target_noise_clip=td3_conf.get("target_noise_clip", 0.5),
         policy_kwargs=policy_kwargs,
         verbose=train_conf.get("verbose", 1),
         seed=config.get("random_state", 42),
@@ -269,10 +270,16 @@ def train(config: dict):
     
     # Initialize action head to favor NOT pruning (lower initial sparsity)
     # This helps exploration across different sparsity levels instead of always 50%
-    action_bias = sac_conf.get("action_bias", 0.05)
+    action_bias = td3_conf.get("action_bias", 0.05)
     if action_bias != 0.0:
         with torch.no_grad():
             action_net = agent.policy.actor.mu
+            # If it's a Sequential, get the last Linear layer (before Tanh if present)
+            if isinstance(action_net, torch.nn.Sequential):
+                if isinstance(action_net[-1], torch.nn.Tanh):
+                    action_net = action_net[-2]  # Linear before Tanh
+                else:
+                    action_net = action_net[-1]  # Last layer if not Tanh
             # Compute the bias for the pre-tanh mean to achieve desired initial action
             desired_action = action_bias
             pre_tanh_bias = torch.atanh(torch.tensor(2 * desired_action - 1))
@@ -280,7 +287,6 @@ def train(config: dict):
             action_net.weight.data *= 0.01
             action_net.bias.fill_(pre_tanh_bias)
             print(f"  Initialized action bias to {pre_tanh_bias:.4f} (initial mean fraction: {desired_action})")
-
 
     
     print(f"\nStarting training for {train_conf['total_timesteps']} steps...")
@@ -294,13 +300,13 @@ def train(config: dict):
     )
     agent.learn(total_timesteps=train_conf["total_timesteps"], callback=callback)
     
-    save_path = train_conf.get("save_path", "ppo_pruning_agent")
+    save_path = train_conf.get("save_path", "td3_pruning_agent")
     agent.save(save_path)
     print(f"\nModel saved to: {save_path}")
 
 
 def evaluate(config: dict):
-    """Evaluate trained PPO agent on test set."""
+    """Evaluate trained TD3 agent on test set."""
     data_conf = config["data"]
     train_conf = config["training"]
     eval_conf = config["evaluation"]
@@ -318,9 +324,9 @@ def evaluate(config: dict):
     print("Creating environment...")
     env = create_env(config, models, test_data)
     
-    load_path = train_conf.get("save_path", "ppo_pruning_agent")
+    load_path = train_conf.get("save_path", "td3_pruning_agent")
     print(f"Loading agent from: {load_path}...")
-    agent = SAC.load(load_path, env=env)
+    agent = TD3.load(load_path, env=env)
     
     print(f"\nEvaluating on {len(test_data)} test samples...")
     print("=" * 60)

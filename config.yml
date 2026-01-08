@@ -1,5 +1,5 @@
 # =============================================================================
-# LLM Pruning with PPO - Configuration
+# LLM Pruning with TD3 - Configuration
 # =============================================================================
 
 random_state: 42
@@ -59,22 +59,26 @@ environment:
   baseline_perplexity: 9.57  # optional: if set, use this constant baseline for speed
 
 # -----------------------------------------------------------------------------
-# SAC Hyperparameters
+# TD3 Hyperparameters
 # -----------------------------------------------------------------------------
-sac:
-  learning_rate: 1.0e-4       # Kept conservative for stability
-  buffer_size: 10000
-  batch_size: 256             # INCREASED: Better gradient estimation
-  tau: 0.005
-  gamma: 0.0                  # CORRECT: Contextual Bandit setting
+td3:
+  learning_rate: 1.0e-4        # Slightly higher than SAC as it's more stable
+  buffer_size: 10000           # Matched to your 5k step limit
+  batch_size: 256              # Better for continuous control
+  tau: 0.005                   # Target network update rate
+  gamma: 0.0                   # Still 0 for Contextual Bandit
   train_freq: 1
-  gradient_steps: 4
-  ent_coef: 'auto'
-  target_update_interval: 1
-  action_bias: 0.05            # initial bias for action mean (fraction to prune per layer)
-
-  pi_layers: [512, 256]       
+  gradient_steps: 5            # High to extract more info per LLM eval
+  
+  # TD3 Specifics
+  policy_delay: 2              # Update actor every 2 critic updates (standard)
+  target_policy_noise: 0.2     # Noise added to target policy (smoothing)
+  target_noise_clip: 0.5       # Range to clip target noise
+  
+  # Policy network architecture
+  pi_layers: [512, 256]        # Classic TD3 architecture
   qf_layers: [512, 256]
+  action_bias: 0.05            # initial bias for action mean (fraction to prune per layer)
 
 # -----------------------------------------------------------------------------
 # Training
@@ -82,7 +86,7 @@ sac:
 training:
   total_timesteps: 15000
   log_interval: 50
-  save_path: checkpoints/ppo_pruning_agent
+  save_path: checkpoints/td3_pruning_agent
   device: cuda             
   verbose: 1
 

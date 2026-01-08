@@ -4,11 +4,29 @@ import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
 import torch
+from scipy.interpolate import CubicSpline
 
 from pruning import PrunableLLM
 from rl.utils import FractionMaskAdapter
 from rl.metrics import PerplexityCalculator, MMLULoglikelihoodCalculator
 from rl.reward import PerplexityReward, CorrectnessReward
+
+
+def get_layer_ratios(action_vector, num_layers=32, num_control_points=8):
+    """
+    Convert 8 control point actions to 32 layer pruning ratios using cubic spline.
+    
+    Args:
+        action_vector (np.array): Shape (num_control_points,). Values in [0, 1].
+    Returns:
+        np.array: Shape (num_layers,). Pruning ratios for each layer.
+    """
+    x_control = np.linspace(0, num_layers - 1, num_control_points)
+    x_query = np.arange(num_layers)
+    cs = CubicSpline(x_control, action_vector, bc_type='clamped')
+    layer_ratios = cs(x_query)
+    layer_ratios = np.clip(layer_ratios, 0.0, 1.0)
+    return layer_ratios
 
 
 class LLMPruningEnv(gym.Env):
@@ -17,7 +35,7 @@ class LLMPruningEnv(gym.Env):
     
     This is a contextual bandit (single-step episodes):
     - Observation: text embedding from encoder
-    - Action: binary mask (which clusters to prune)
+    - Action: 8 control points (0-1) for cubic spline parametrization of pruning fractions per layer
     - Reward: quality (perplexity or correctness) + sparsity tradeoff
     
     Args:
@@ -73,7 +91,7 @@ class LLMPruningEnv(gym.Env):
         
         # Spaces
         self.action_space = spaces.Box(
-            low=0.0, high=1.0, shape=(32,), dtype=np.float32
+            low=0.0, high=1.0, shape=(8,), dtype=np.float32
         )
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, shape=(embed_dim,), dtype=np.float32
@@ -136,13 +154,16 @@ class LLMPruningEnv(gym.Env):
         """
         assert self._current_item is not None, "Call reset() first"
         
+        # Convert 8 control points to 32 layer ratios using cubic spline
+        layer_ratios = get_layer_ratios(action)
+        
         # Compute baseline on unpruned model only if no baseline_perplexity supplied
         baseline_ll = None
         if self.task == "perplexity" and self.baseline_perplexity is None:
             baseline_ll, _ = self.metric_calculator.compute(self.model, self._current_item)
         
         # Apply pruning
-        mask_fn = self.mask_adapter.get_mask_fn(action)
+        mask_fn = self.mask_adapter.get_mask_fn(layer_ratios)
         self.model.prune(mask_fn, storage="gpu")
         
         # Compute metric on pruned model
@@ -155,7 +176,7 @@ class LLMPruningEnv(gym.Env):
         # Build info dict and compute reward
         info = {
             "sparsity": sparsity,
-            "mean_fraction_pruned": float(action.mean()),
+            "mean_fraction_pruned": float(layer_ratios.mean()),
         }
         
         if self.task == "perplexity":
