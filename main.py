@@ -8,6 +8,7 @@ from tqdm import tqdm
 from typing import Literal
 from stable_baselines3 import TD3
 from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.logger import configure
 from transformers import AutoModelForCausalLM, AutoTokenizer, AutoModel
 
 from pruning import PrunableLLM
@@ -114,7 +115,7 @@ class MetricsCallback(BaseCallback):
             recent_rewards = self.rewards[-self.log_interval:] if len(self.rewards) >= 1 else []
             if len(recent_rewards) > 0:
                 mean_reward = float(np.mean(recent_rewards))
-                reward_str = f" | AvgReward: {mean_reward:.4f}"
+                reward_str = f" | AvgReward: {mean_reward:.4f} ± {np.std(recent_rewards):.4f}"
             else:
                 mean_reward = None
                 reward_str = ""
@@ -126,7 +127,7 @@ class MetricsCallback(BaseCallback):
                 self.pbar.set_postfix_str(f"Sparsity: {np.mean(recent_sparsity):.2%}")
 
             # Permanent log line (prints to stdout and remains in terminal history)
-            print(f"[{self.n_calls}] {metric_str} | Sparsity: {np.mean(recent_sparsity):.2%}{reward_str}")
+            print(f"[{self.n_calls}] {metric_str} | Sparsity: {np.mean(recent_sparsity):.2%} ± {np.std(recent_sparsity):.2%}{reward_str}")
 
             # Save aggregate snapshot to history
             self.history.append(
@@ -268,6 +269,10 @@ def train(config: dict):
         seed=config.get("random_state", 42),
     )
     
+    # Configure logging for monitoring RL metrics
+    logger = configure(folder="./logs/", format_strings=["stdout", "csv", "tensorboard"])
+    agent.set_logger(logger)
+    
     # Initialize action head to favor NOT pruning (lower initial sparsity)
     # This helps exploration across different sparsity levels instead of always 50%
     action_bias = td3_conf.get("action_bias", 0.05)
@@ -280,13 +285,14 @@ def train(config: dict):
                     action_net = action_net[-2]  # Linear before Tanh
                 else:
                     action_net = action_net[-1]  # Last layer if not Tanh
-            # Compute the bias for the pre-tanh mean to achieve desired initial action
-            desired_action = action_bias
-            pre_tanh_bias = torch.atanh(torch.tensor(2 * desired_action - 1))
+            # Compute biases: first and last close to 0, middle 6 are 4x bigger
+            desired_actions = [0.0, action_bias * 4, action_bias * 4, action_bias * 4, 
+                               action_bias * 4, action_bias * 4, action_bias * 4, 0.0]
+            pre_tanh_biases = torch.atanh(torch.tensor(2 * torch.tensor(desired_actions) - 1))
             # Scale down weights to small values so bias dominates initially, but allow updates
             action_net.weight.data *= 0.01
-            action_net.bias.fill_(pre_tanh_bias)
-            print(f"  Initialized action bias to {pre_tanh_bias:.4f} (initial mean fraction: {desired_action})")
+            action_net.bias.copy_(pre_tanh_biases)
+            print(f"  Initialized action biases to {pre_tanh_biases} (desired actions: {desired_actions})")
 
     
     print(f"\nStarting training for {train_conf['total_timesteps']} steps...")

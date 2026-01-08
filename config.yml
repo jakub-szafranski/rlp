@@ -64,7 +64,7 @@ environment:
 td3:
   learning_rate: 1.0e-4        # Slightly higher than SAC as it's more stable
   buffer_size: 10000           # Matched to your 5k step limit
-  batch_size: 256              # Better for continuous control
+  batch_size: 128              # Better for continuous control
   tau: 0.005                   # Target network update rate
   gamma: 0.0                   # Still 0 for Contextual Bandit
   train_freq: 1
@@ -76,8 +76,8 @@ td3:
   target_noise_clip: 0.5       # Range to clip target noise
   
   # Policy network architecture
-  pi_layers: [512, 256]        # Classic TD3 architecture
-  qf_layers: [512, 256]
+  pi_layers: [256, 128]        # Classic TD3 architecture
+  qf_layers: [256, 128]
   action_bias: 0.05            # initial bias for action mean (fraction to prune per layer)
 
 # -----------------------------------------------------------------------------
