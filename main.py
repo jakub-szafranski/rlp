@@ -286,8 +286,8 @@ def train(config: dict):
                 else:
                     action_net = action_net[-1]  # Last layer if not Tanh
             # Compute biases: first and last close to 0, middle 6 are 4x bigger
-            desired_actions = [0.0, action_bias * 4, action_bias * 4, action_bias * 4, 
-                               action_bias * 4, action_bias * 4, action_bias * 4, 0.0]
+            desired_actions = [0.01, action_bias * 4, action_bias * 4, action_bias * 4, 
+                               action_bias * 4, action_bias * 4, action_bias * 4, 0.01]
             pre_tanh_biases = torch.atanh(torch.tensor(2 * torch.tensor(desired_actions) - 1))
             # Scale down weights to small values so bias dominates initially, but allow updates
             action_net.weight.data *= 0.01
