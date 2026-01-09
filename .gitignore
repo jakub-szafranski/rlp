@@ -69,3 +69,5 @@ htmlcov/
 Thumbs.db
 
 *.ipynb
+
+*cpython*
