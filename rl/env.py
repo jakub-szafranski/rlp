@@ -180,19 +180,19 @@ class LLMPruningEnv(gym.Env):
         }
         
         if self.task == "perplexity":
-            pruned_ll, word_count = metric_value
+            pruned_ll, token_count = metric_value
 
-            if word_count > 0:
+            if token_count > 0:
                 # Compute per-doc perplexity for reward. If a config baseline
                 # is provided, use it directly for speed; otherwise compute
                 # the baseline from the unpruned model's log-likelihood.
                 if self.baseline_perplexity is not None:
                     baseline_ppl = float(self.baseline_perplexity)
-                    baseline_ll = -word_count * np.log(baseline_ppl)
+                    baseline_ll = -token_count * np.log(baseline_ppl)
                 else:
-                    baseline_ppl = np.exp(-baseline_ll / word_count)
+                    baseline_ppl = np.exp(-baseline_ll / token_count)
 
-                pruned_ppl = np.exp(-pruned_ll / word_count)
+                pruned_ppl = np.exp(-pruned_ll / token_count)
                 reward = self.reward_calculator.compute_reward(pruned_ppl, baseline_ppl, sparsity)
 
                 info["perplexity"] = pruned_ppl
@@ -203,10 +203,10 @@ class LLMPruningEnv(gym.Env):
                 info["perplexity"] = 0.0
                 info["baseline_perplexity"] = 0.0
 
-            # Store raw log-likelihood and word_count for proper aggregation
+            # Store raw log-likelihood and token_count for proper aggregation
             info["log_likelihood"] = pruned_ll
             info["baseline_log_likelihood"] = baseline_ll
-            info["word_count"] = word_count
+            info["token_count"] = token_count
         else:  # correctness
             correct = metric_value  # bool
             reward = self.reward_calculator.compute_reward(correct, sparsity)

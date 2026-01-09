@@ -32,10 +32,10 @@ class MetricsCallback(BaseCallback):
         self.sparsities = []
         # Recent rewards collected from trainer locals (if available)
         self.rewards = []
-        # For perplexity: aggregate log-likelihood and word counts for proper PPL calculation
+        # For perplexity: aggregate log-likelihood and token counts for proper PPL calculation
         self.log_likelihoods = []
         self.baseline_log_likelihoods = []
-        self.word_counts = []
+        self.token_counts = []
         # For accuracy
         self.accuracies = []
         self.pbar = None
@@ -62,7 +62,7 @@ class MetricsCallback(BaseCallback):
             if self.task == "perplexity":
                 self.log_likelihoods.append(info.get("log_likelihood", 0.0))
                 self.baseline_log_likelihoods.append(info.get("baseline_log_likelihood", 0.0))
-                self.word_counts.append(info.get("word_count", 0))
+                self.token_counts.append(info.get("token_count", 0))
             else:
                 self.accuracies.append(float(info.get("correct", False)))
 
@@ -97,14 +97,14 @@ class MetricsCallback(BaseCallback):
             recent_sparsity = self.sparsities[-self.log_interval:]
             
             if self.task == "perplexity":
-                # Aggregate log-likelihoods and word counts for proper perplexity
+                # Aggregate log-likelihoods and token counts for proper perplexity
                 recent_ll = self.log_likelihoods[-self.log_interval:]
                 recent_baseline_ll = self.baseline_log_likelihoods[-self.log_interval:]
-                recent_wc = self.word_counts[-self.log_interval:]
-                total_wc = sum(recent_wc)
-                if total_wc > 0:
-                    pruned_ppl = np.exp(-sum(recent_ll) / total_wc)
-                    baseline_ppl = np.exp(-sum(recent_baseline_ll) / total_wc)
+                recent_tc = self.token_counts[-self.log_interval:]
+                total_tc = sum(recent_tc)
+                if total_tc > 0:
+                    pruned_ppl = np.exp(-sum(recent_ll) / total_tc)
+                    baseline_ppl = np.exp(-sum(recent_baseline_ll) / total_tc)
                     metric_str = f"PPL: {pruned_ppl:>6.2f} (base: {baseline_ppl:.2f})"
                 else:
                     metric_str = "PPL: N/A"

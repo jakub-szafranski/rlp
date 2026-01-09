@@ -29,12 +29,12 @@ class MetricCalculator(ABC):
 
 class PerplexityCalculator(MetricCalculator):
     """
-    Computes word-level perplexity on WikiText, matching lm-evaluation-harness.
+    Computes token-level perplexity on WikiText, matching lm-evaluation-harness.
     
     Key implementation details:
     - Uses DISJOINT (non-overlapping) windows
     - Prepends EOS token to each document
-    - Returns (log_likelihood, word_count) tuple for proper aggregation
+    - Returns (log_likelihood, token_count) tuple for proper aggregation
     """
     
     def __init__(self, tokenizer, max_length: int = 2048):
@@ -44,19 +44,18 @@ class PerplexityCalculator(MetricCalculator):
     @torch.no_grad()
     def compute(self, model: PrunableLLM, item: dict) -> tuple[float, int]:
         """
-        Compute log-likelihood and word count for a WikiText document.
+        Compute log-likelihood and token count for a WikiText document.
         
         Args:
             model: The language model.
-            item: Dict with 'text' (detokenized) and 'word_count'.
+            item: Dict with 'text' (detokenized).
             
         Returns:
-            Tuple of (log_likelihood, word_count). Returns (0.0, 0) if empty.
+            Tuple of (log_likelihood, token_count). Returns (0.0, 0) if empty.
         """
         device = next(model.parameters()).device
         
         text = item["text"]
-        word_count = item.get("word_count", len(text.split()))
         
         # Tokenize (text should already be detokenized by WikiTextDataSource)
         tokens = self.tokenizer.encode(text, add_special_tokens=False)
@@ -67,6 +66,7 @@ class PerplexityCalculator(MetricCalculator):
         tokens = [self.tokenizer.eos_token_id] + tokens
         
         total_log_likelihood = 0.0
+        total_tokens = 0
         
         # Disjoint windows
         for i in range(0, len(tokens), self.max_length):
@@ -89,8 +89,9 @@ class PerplexityCalculator(MetricCalculator):
             ).squeeze(-1)
             
             total_log_likelihood += token_log_probs.sum().item()
+            total_tokens += token_log_probs.numel()
         
-        return (total_log_likelihood, word_count)
+        return (total_log_likelihood, total_tokens)
     
 
 
