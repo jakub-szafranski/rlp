@@ -4,6 +4,7 @@ import numpy as np
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import argparse
+import time
 
 from pruning import PrunableLLM
 from rl.data_source import WikiTextDataSource
@@ -48,10 +49,15 @@ def evaluate_unpruned(config: dict):
     total_log_likelihood = 0.0
     total_tokens = 0
     
+    start_time = time.time()
     for item in tqdm(test_data, desc="Evaluating"):
         ll, tc = calculator.compute(prunable_llm, item)
         total_log_likelihood += ll
         total_tokens += tc
+    end_time = time.time()
+    
+    eval_time = end_time - start_time
+    print(f"Evaluation time: {eval_time:.2f} seconds")
     
     if total_tokens > 0:
         perplexity = np.exp(-total_log_likelihood / total_tokens)
@@ -82,27 +88,35 @@ def evaluate_pruned(config: dict, action: list[float]):
     print("Computing perplexity with pruning...")
     total_log_likelihood = 0.0
     total_tokens = 0
-    sparsities = []
     
+    start_time = time.time()
+    prunable_llm.prune(mask_fn, storage="gpu")
+    end_pruning = time.time()
+    print(f"Pruning time: {end_pruning - start_time:.2f} seconds")
+    sparsity = prunable_llm.sparsity
     for item in tqdm(test_data, desc="Evaluating"):
-        prunable_llm.prune(mask_fn, storage="gpu")
         ll, tc = calculator.compute(prunable_llm, item)
-        sparsity = prunable_llm.sparsity
-        prunable_llm.undo_prune()
         
         total_log_likelihood += ll
         total_tokens += tc
-        sparsities.append(sparsity)
+    
+    s_unprune = time.time()
+    prunable_llm.undo_prune()
+    end_unpruning = time.time() 
+    print(f"Unpruning time: {end_unpruning - s_unprune:.2f} seconds")
+    end_time = time.time()
+    eval_time = end_time - start_time
+    print(f"Inference time with pruning: {eval_time - (end_pruning - start_time) - (end_unpruning - s_unprune):.2f} seconds")
+    print(f"Total evaluation time: {eval_time:.2f} seconds")
     
     if total_tokens > 0:
         perplexity = np.exp(-total_log_likelihood / total_tokens)
-        mean_sparsity = np.mean(sparsities)
         print(f"\nPruned Perplexity: {perplexity:.2f}")
-        print(f"Mean Sparsity: {mean_sparsity:.2%}")
+        print(f"Sparsity: {sparsity:.2%}")
     else:
         print("No tokens to evaluate.")
     
-    return perplexity, mean_sparsity
+    return perplexity, sparsity
 
 
 if __name__ == "__main__":
