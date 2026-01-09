@@ -5,7 +5,7 @@
 - **Core idea**: Treat pruning as a contextual bandit RL problem. Each episode:
   - Sample a text example from WikiText (perplexity) or MMLU (multiple-choice correctness).
   - Encode the text into a fixed-size embedding (ModernBERT).
-  - The SAC agent outputs continuous fractions (0-1) for each of the 32 layers, indicating what fraction of neurons to prune in that layer.
+  - The SAC agent outputs 8 continuous control points (0-1), which are interpolated using a cubic spline to produce pruning fractions for each of the 32 layers, indicating what fraction of neurons to prune in that layer.
   - The environment prunes the model according to these fractions (keeping the most important neurons), evaluates quality, restores the model, and returns a reward combining quality and sparsity.
 
 ## High-level architecture
@@ -48,17 +48,18 @@
 - `rl/`
   - `env.py` – `LLMPruningEnv` (Gymnasium env):
     - **Observation**: embedding of current text example from encoder.
-    - **Action**: `Box(0, 1, (32,))` – continuous fractions for each of the 32 layers.
+    - **Action**: `Box(0, 1, (8,))` – 8 control points for cubic spline interpolation to 32 layer pruning fractions.
     - **Reward**: computed from either perplexity change (WikiText) or correctness (MMLU) plus sparsity.
     - Flow in `step(action)`:
       1. Optionally compute baseline perplexity on the unpruned model (for WikiText).
-      2. Build a `mask_fn` from the fraction action using `FractionMaskAdapter`.
-      3. Call `model.prune(mask_fn, storage='gpu')`.
-      4. Compute metric using `self.metric_calculator.compute`.
-      5. Read sparsity from `model.sparsity`.
-      6. Call `model.undo_prune()` to restore full model.
-      7. Compute reward via `self.reward_calculator.compute_reward(...)`.
-      8. Sample next item and return its embedding.
+      2. Interpolate 8 control points to 32 layer fractions using cubic spline.
+      3. Build a `mask_fn` from the interpolated fractions using `FractionMaskAdapter`.
+      4. Call `model.prune(mask_fn, storage='gpu')`.
+      5. Compute metric using `self.metric_calculator.compute`.
+      6. Read sparsity from `model.sparsity`.
+      7. Call `model.undo_prune()` to restore full model.
+      8. Compute reward via `self.reward_calculator.compute_reward(...)`.
+      9. Sample next item and return its embedding.
 
   - `data_source.py`:
     - Abstract `DataSource` base class with `__iter__` and `__len__`.
@@ -88,7 +89,7 @@
       - Combines ±1 correctness signal with sparsity-based reward.
 
   - `utils.py` (RL):
-    - `FractionMaskAdapter` converts a layer-wise fraction action into the `mask_fn(layer_idx) -> bool tensor` expected by `PrunableLLM.prune`.
+    - `FractionMaskAdapter` converts interpolated layer-wise fraction actions into the `mask_fn(layer_idx) -> bool tensor` expected by `PrunableLLM.prune`.
 
 - `grouping_statistics/` & JSONs
   - Hold activation data and importance scores (e.g., `neuron_importance_up_proj.json`).
