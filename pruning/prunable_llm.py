@@ -52,11 +52,10 @@ class PrunableLLM:
     def prune(
         self,
         mask_fn: Callable[[int], torch.Tensor],
-        storage: Literal["cpu", "gpu"] = "cpu",
         cast_dtype: torch.dtype = torch.float16,
     ) -> None:
         self._undo_pack = prune_with_undo_pack(
-            self.model, mask_fn=mask_fn, storage=storage, cast_dtype=cast_dtype
+            self.model, mask_fn=mask_fn, cast_dtype=cast_dtype
         )
 
     @torch.no_grad()

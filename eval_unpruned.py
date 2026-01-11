@@ -31,6 +31,7 @@ def load_model(config: dict):
     )
     tokenizer = AutoTokenizer.from_pretrained(model_conf["name"])
     prunable_llm = PrunableLLM(llm)
+    prunable_llm.model.eval()
     
     return prunable_llm, tokenizer
 

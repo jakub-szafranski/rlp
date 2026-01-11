@@ -100,6 +100,8 @@ class LLMPruningEnv(gym.Env):
         # State
         self._current_item: Optional[dict] = None
         self._data_iter: Optional[Iterator] = None
+
+        print("Total parameters in model:", sum(int(p.numel()) for p in model.parameters()))
     
     @torch.no_grad()
     def _encode_text(self, text: str) -> np.ndarray:

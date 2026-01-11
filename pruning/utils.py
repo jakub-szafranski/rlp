@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Callable, Dict, Literal, Optional
+from typing import Callable, Dict, Literal, Optional, Tuple
 import torch
 import torch.nn as nn
 from pydantic import BaseModel, Field, ConfigDict
@@ -18,6 +18,7 @@ class LayerUndoEntry(BaseModel):
     gate_removed: torch.Tensor
     up_removed: torch.Tensor
     down_removed: torch.Tensor
+    bias_delta: torch.Tensor 
     dtype_gate: str
     dtype_up: str
     dtype_down: str
@@ -26,17 +27,13 @@ class LayerUndoEntry(BaseModel):
 
 
 class UndoPack(BaseModel):
-    storage: Literal["cpu", "gpu"] = "cpu"
+    storage: Literal["gpu"] = "gpu"
     dims: Dims
     layers: Dict[int, LayerUndoEntry] = Field(default_factory=dict)
-    sparsity: float = 0.0     # Fraction of model parameters pruned (0-1). 
-
+    sparsity: float = 0.0
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-
-def _cpu_int(x: torch.Tensor) -> torch.Tensor:
-    return x.detach().to("cpu", torch.int32).contiguous()
 
 def _dtype_from_str(s: str) -> torch.dtype:
     return getattr(torch, s.replace("torch.", ""))
@@ -45,91 +42,85 @@ def _dtype_from_str(s: str) -> torch.dtype:
 @torch.no_grad()
 def prune_with_undo_pack(
     model: PreTrainedModel,
-    mask_fn: Callable[[int], torch.Tensor],
-    storage: Literal["cpu", "gpu"] = "cpu",
+    mask_fn: Callable[[int], Tuple[torch.Tensor, torch.Tensor, torch.Tensor]],
     cast_dtype: torch.dtype = torch.float16,
 ) -> UndoPack:
-    if storage not in {"gpu", "cpu"}:
-        raise ValueError("storage must be 'cpu' | 'gpu'")
-
+    """
+    Prune MLP neurons with FLAP bias compensation (improved version).
+    """
     mlp0 = model.model.layers[0].mlp
     hidden = int(mlp0.gate_proj.in_features)
     inter = int(mlp0.gate_proj.out_features)
-    pack = UndoPack(storage=storage, dims=Dims(hidden=hidden, inter=inter))
+    pack = UndoPack(storage="gpu", dims=Dims(hidden=hidden, inter=inter))
 
-    pin_ok = torch.cuda.is_available()
-    
-    # Track parameter-level sparsity across the whole model
-    total_neurons = 0
-    pruned_neurons = 0
     total_model_params = sum(int(p.numel()) for p in model.parameters())
     pruned_params = 0
 
     for layer_idx, layer in enumerate(model.model.layers):
         mlp = layer.mlp
-        keep = mask_fn(layer_idx).bool()
+        device = mlp.gate_proj.weight.device
+        
+        # Get mask and FLAP data
+        keep, prune_indices, prune_means = mask_fn(layer_idx)
         remove = ~keep
         
-        # Accumulate for sparsity
-        total_neurons += len(keep)
-        pruned_neurons += int(remove.sum().item())
-
         gate_w = mlp.gate_proj.weight.data
-        up_w   = mlp.up_proj.weight.data
+        up_w = mlp.up_proj.weight.data
         down_w = mlp.down_proj.weight.data
+        weight_dtype = down_w.dtype
 
-        # Prune
+        if prune_indices.numel() > 0:
+            pruned_weights_fp32 = down_w[:, prune_indices].float()
+            means_fp32 = prune_means.float()
+            bias_delta_fp32 = torch.matmul(pruned_weights_fp32, means_fp32)
+        else:
+            bias_delta_fp32 = torch.zeros(down_w.shape[0], device=device, dtype=torch.float32)
+
+        bias_delta = bias_delta_fp32.to(weight_dtype)
+        if mlp.down_proj.bias is None:
+            mlp.down_proj.bias = torch.nn.Parameter(bias_delta.clone())
+        else:
+            mlp.down_proj.bias.data.add_(bias_delta)
+
+        # --- Physical Pruning ---
         w_gate = gate_w[keep, :].contiguous()
-        w_up   = up_w[keep,   :].contiguous()
+        w_up = up_w[keep, :].contiguous()
         w_down = down_w[:, keep].contiguous()
 
         mlp.gate_proj.weight.data = w_gate
-        mlp.up_proj.weight.data   = w_up
+        mlp.up_proj.weight.data = w_up
         mlp.down_proj.weight.data = w_down
 
         new_size = int(keep.sum().item())
         mlp.gate_proj.out_features = new_size
-        mlp.up_proj.out_features   = new_size
-        mlp.down_proj.in_features  = new_size
+        mlp.up_proj.out_features = new_size
+        mlp.down_proj.in_features = new_size
 
-        # Removed slices
+        # Store removed slices
         gate_removed = gate_w[remove, :].contiguous()
-        up_removed   = up_w[remove,   :].contiguous()
+        up_removed = up_w[remove, :].contiguous()
         down_removed = down_w[:, remove].contiguous()
 
-        # Parameter-level accounting for this layer (counts of removed params)
         pruned_params += int(gate_removed.numel() + up_removed.numel() + down_removed.numel())
 
-        keep_idx = _cpu_int(torch.nonzero(keep).view(-1))
-        rem_idx  = _cpu_int(torch.nonzero(remove).view(-1))
+        # Store indices directly on GPU as long (no CPU conversion)
+        keep_idx = torch.nonzero(keep, as_tuple=False).squeeze(1)
+        rem_idx = torch.nonzero(remove, as_tuple=False).squeeze(1)
 
-        if storage == "gpu":
-            entry = LayerUndoEntry(
-                keep_idx=keep_idx, rem_idx=rem_idx,
-                gate_removed=gate_removed.to(gate_w.device, dtype=cast_dtype),
-                up_removed=up_removed.to(up_w.device, dtype=cast_dtype),
-                down_removed=down_removed.to(down_w.device, dtype=cast_dtype),
-                dtype_gate=str(gate_w.dtype),
-                dtype_up=str(up_w.dtype),
-                dtype_down=str(down_w.dtype),
-            )
-        else:
-            gr = gate_removed.detach().to(device="cpu", dtype=cast_dtype).contiguous()
-            ur = up_removed.detach().to(device="cpu", dtype=cast_dtype).contiguous()
-            dr = down_removed.detach().to(device="cpu", dtype=cast_dtype).contiguous()
-            if pin_ok:
-                gr = gr.pin_memory(); ur = ur.pin_memory(); dr = dr.pin_memory()
-            entry = LayerUndoEntry(
-                keep_idx=keep_idx, rem_idx=rem_idx,
-                gate_removed=gr, up_removed=ur, down_removed=dr,
-                dtype_gate=str(gate_w.dtype),
-                dtype_up=str(up_w.dtype),
-                dtype_down=str(down_w.dtype),
-            )
+        entry = LayerUndoEntry(
+            keep_idx=keep_idx,
+            rem_idx=rem_idx,
+            gate_removed=gate_removed.to(dtype=cast_dtype),
+            up_removed=up_removed.to(dtype=cast_dtype),
+            down_removed=down_removed.to(dtype=cast_dtype),
+            bias_delta=bias_delta.to(dtype=cast_dtype),  # store the applied delta
+            dtype_gate=str(gate_w.dtype),
+            dtype_up=str(up_w.dtype),
+            dtype_down=str(down_w.dtype),
+        )
 
         pack.layers[layer_idx] = entry
-    
-    # Compute parameter-level sparsity across the whole model and store
+
     pack.sparsity = pruned_params / total_model_params if total_model_params > 0 else 0.0
 
     return pack
@@ -142,46 +133,44 @@ def unprune_from_undo_pack(
     device: Optional[torch.device] = None
 ) -> None:
     hidden = int(pack.dims.hidden)
-    inter  = int(pack.dims.inter)
+    inter = int(pack.dims.inter)
 
     for layer_idx, layer in enumerate(model.model.layers):
         mlp = layer.mlp
         dev = device or mlp.gate_proj.weight.device
 
         entry = pack.layers[layer_idx]
-        keep_idx = entry.keep_idx.to(device=dev, dtype=torch.long)
-        rem_idx  = entry.rem_idx.to(device=dev, dtype=torch.long)
+        keep_idx = entry.keep_idx.to(device=dev)
+        rem_idx = entry.rem_idx.to(device=dev)
 
         gate_dtype = _dtype_from_str(entry.dtype_gate)
-        up_dtype   = _dtype_from_str(entry.dtype_up)
+        up_dtype = _dtype_from_str(entry.dtype_up)
         down_dtype = _dtype_from_str(entry.dtype_down)
 
-        # Current (pruned) weights – already on GPU
+        # Current (pruned) weights
         gate_cur = mlp.gate_proj.weight.data
-        up_cur   = mlp.up_proj.weight.data
+        up_cur = mlp.up_proj.weight.data
         down_cur = mlp.down_proj.weight.data
 
-        # Removed slices are on GPU already if storage="gpu"
+        # Removed slices
         gate_removed = entry.gate_removed.to(dev, gate_dtype, non_blocking=True)
-        up_removed   = entry.up_removed.to(dev,   up_dtype,   non_blocking=True)
+        up_removed = entry.up_removed.to(dev, up_dtype, non_blocking=True)
         down_removed = entry.down_removed.to(dev, down_dtype, non_blocking=True)
 
-        # Allocate full tensors ONCE per layer
+        # Allocate full tensors
         full_gate = torch.empty((inter, hidden), dtype=gate_dtype, device=dev)
-        full_up   = torch.empty((inter, hidden), dtype=up_dtype,   device=dev)
+        full_up = torch.empty((inter, hidden), dtype=up_dtype, device=dev)
         full_down = torch.empty((hidden, inter), dtype=down_dtype, device=dev)
 
-        # Fill kept rows/cols from current (pruned) weights
+        # Restore weights
         full_gate[keep_idx, :] = gate_cur
-        full_up[keep_idx,   :] = up_cur
+        full_up[keep_idx, :] = up_cur
         full_down[:, keep_idx] = down_cur
 
-        # Fill removed rows/cols from undo pack
         full_gate[rem_idx, :] = gate_removed
-        full_up[rem_idx,   :] = up_removed
+        full_up[rem_idx, :] = up_removed
         full_down[:, rem_idx] = down_removed
 
-        # Reuse Parameter objects
         mlp.gate_proj.weight.data = full_gate
         mlp.gate_proj.out_features = inter
         mlp.gate_proj.in_features = hidden
@@ -194,21 +183,26 @@ def unprune_from_undo_pack(
         mlp.down_proj.in_features = inter
         mlp.down_proj.out_features = hidden
 
-        # Drop **this layer's** undo tensors so they no longer pin GPU memory
-        entry.gate_removed = torch.empty(0, device="cpu")
-        entry.up_removed   = torch.empty(0, device="cpu")
-        entry.down_removed = torch.empty(0, device="cpu")
-        entry.keep_idx = torch.empty(0, dtype=torch.int32, device="cpu")
-        entry.rem_idx  = torch.empty(0, dtype=torch.int32, device="cpu")
+        # --- Reverse FLAP bias compensation ---
+        if mlp.down_proj.bias is not None:
+            bias_delta = entry.bias_delta.to(dev, mlp.down_proj.bias.dtype, non_blocking=True)
+            mlp.down_proj.bias.data.sub_(bias_delta)
+            
+            if torch.allclose(mlp.down_proj.bias.data, torch.zeros_like(mlp.down_proj.bias.data), atol=1e-5):
+                mlp.down_proj.bias = None
 
-        # Remove entry from pack so Python GC can release it
+        entry.gate_removed = torch.empty(0, device="cpu")
+        entry.up_removed = torch.empty(0, device="cpu")
+        entry.down_removed = torch.empty(0, device="cpu")
+        entry.bias_delta = torch.empty(0, device="cpu")
+        entry.keep_idx = torch.empty(0, dtype=torch.long, device="cpu")
+        entry.rem_idx = torch.empty(0, dtype=torch.long, device="cpu")
+
         pack.layers.pop(layer_idx, None)
 
-        # Delete references in this scope
         del gate_cur, up_cur, down_cur
         del gate_removed, up_removed, down_removed
         del full_gate, full_up, full_down
         del keep_idx, rem_idx
 
-    # After all layers, drop the pack object itself
     del pack

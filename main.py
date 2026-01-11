@@ -179,6 +179,7 @@ def load_models(config: dict):
     )
     llm_tokenizer = AutoTokenizer.from_pretrained(model_conf["name"])
     prunable_llm = PrunableLLM(llm)
+    prunable_llm.model.eval()
     
     print(f"Loading encoder: {encoder_conf['name']}...")
     encoder = AutoModel.from_pretrained(encoder_conf["name"]).to(device)

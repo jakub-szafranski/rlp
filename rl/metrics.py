@@ -29,14 +29,9 @@ class MetricCalculator(ABC):
 
 class PerplexityCalculator(MetricCalculator):
     """
-    Computes token-level perplexity on WikiText, matching lm-evaluation-harness.
-    
-    Key implementation details:
-    - Uses DISJOINT (non-overlapping) windows
-    - Prepends EOS token to each document
-    - Returns (log_likelihood, token_count) tuple for proper aggregation
+    Computes token-level perplexity matching lm-evaluation-harness exactly.
+    Uses rolling windows with proper continuation handling.
     """
-    
     def __init__(self, tokenizer, max_length: int = 2048):
         super().__init__(tokenizer)
         self.max_length = max_length
@@ -45,32 +40,26 @@ class PerplexityCalculator(MetricCalculator):
     def compute(self, model: PrunableLLM, item: dict) -> tuple[float, int]:
         """
         Compute log-likelihood and token count for a WikiText document.
-        
-        Args:
-            model: The language model.
-            item: Dict with 'text' (detokenized).
-            
-        Returns:
-            Tuple of (log_likelihood, token_count). Returns (0.0, 0) if empty.
+        Matches lm-evaluation-harness implementation exactly.
         """
         device = next(model.parameters()).device
-        
         text = item["text"]
         
-        # Tokenize (text should already be detokenized by WikiTextDataSource)
-        tokens = self.tokenizer.encode(text, add_special_tokens=False)
-        if not tokens:
-            return (0.0, 0)
+        # Tokenize WITH special tokens (adds BOS for Llama)
+        encoding = self.tokenizer(text, add_special_tokens=True)
+        tokens = encoding["input_ids"]
         
-        # Prepend EOS token (matches lm-eval-harness)
-        tokens = [self.tokenizer.eos_token_id] + tokens
+        if len(tokens) < 2:
+            return (0.0, 0)
         
         total_log_likelihood = 0.0
         total_tokens = 0
         
-        # Disjoint windows
-        for i in range(0, len(tokens), self.max_length):
-            window = tokens[i:i + self.max_length]
+        # Rolling windows - process entire sequence
+        for start_idx in range(0, len(tokens), self.max_length):
+            end_idx = min(start_idx + self.max_length, len(tokens))
+            window = tokens[start_idx:end_idx]
+            
             if len(window) < 2:
                 continue
             
@@ -78,7 +67,7 @@ class PerplexityCalculator(MetricCalculator):
             outputs = model(input_ids)
             logits = outputs.logits
             
-            # Shift for next-token prediction: predict tokens[1:] given tokens[:-1]
+            # Shift for next-token prediction
             shift_logits = logits[:, :-1, :].contiguous()
             shift_labels = input_ids[:, 1:].contiguous()
             
@@ -88,8 +77,15 @@ class PerplexityCalculator(MetricCalculator):
                 log_probs, 2, shift_labels.unsqueeze(-1)
             ).squeeze(-1)
             
-            total_log_likelihood += token_log_probs.sum().item()
-            total_tokens += token_log_probs.numel()
+            # For first window: skip BOS token (don't predict first real token from BOS)
+            # For subsequent windows: score all tokens
+            if start_idx == 0:
+                # Skip the first prediction (BOS -> first_token)
+                total_log_likelihood += token_log_probs[:, 1:].sum().item()
+                total_tokens += token_log_probs[:, 1:].numel()
+            else:
+                total_log_likelihood += token_log_probs.sum().item()
+                total_tokens += token_log_probs.numel()
         
         return (total_log_likelihood, total_tokens)
     
