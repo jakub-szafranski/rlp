@@ -1,7 +1,7 @@
 import numpy as np
 from typing import Callable
 import torch
-from pruning import PrunableLLM, get_pruning_mask
+from pruning import PrunableLLM, get_pruning_mask_and_means
 
 
 class FractionMaskAdapter:
@@ -32,7 +32,7 @@ class FractionMaskAdapter:
         def mask_fn(layer_idx: int) -> torch.Tensor:
             fraction = action[layer_idx]
             layer_str = str(layer_idx)
-            mask = get_pruning_mask(fraction, layer_str)
+            mask, _ = get_pruning_mask_and_means(fraction, layer_str)
             return torch.from_numpy(mask).bool()
         
         return mask_fn
