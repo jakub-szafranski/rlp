@@ -7,7 +7,7 @@ import torch
 from scipy.interpolate import CubicSpline
 
 from pruning import PrunableLLM
-from rl.utils import FractionMaskAdapter
+from pruning.create_pruning_mask import make_mask_fn
 from rl.metrics import PerplexityCalculator, MMLULoglikelihoodCalculator
 from rl.reward import PerplexityReward, CorrectnessReward
 
@@ -80,7 +80,6 @@ class LLMPruningEnv(gym.Env):
         self.baseline_perplexity = baseline_perplexity
         
         # Components based on task
-        self.mask_adapter = FractionMaskAdapter()
         
         if task == "perplexity":
             self.metric_calculator = PerplexityCalculator(llm_tokenizer, max_seq_len)
@@ -165,7 +164,7 @@ class LLMPruningEnv(gym.Env):
             baseline_ll, _ = self.metric_calculator.compute(self.model, self._current_item)
         
         # Apply pruning
-        mask_fn = self.mask_adapter.get_mask_fn(layer_ratios)
+        mask_fn = make_mask_fn(layer_ratios.tolist(), device=self.device)
         self.model.prune(mask_fn, storage="gpu")
         
         # Compute metric on pruned model
