@@ -7,10 +7,10 @@ import argparse
 import time
 
 from pruning import PrunableLLM
+from pruning.create_pruning_mask import make_mask_fn
 from rl.data_source import WikiTextDataSource
 from rl.metrics import PerplexityCalculator
 from rl.env import get_layer_ratios
-from rl.utils import FractionMaskAdapter
 
 
 def load_config(config_path: str = "config.yml") -> dict:
@@ -83,8 +83,8 @@ def evaluate_pruned(config: dict, action: list[float]):
     layer_ratios = get_layer_ratios(np.array(action))
     print(f"Layer ratios: {layer_ratios}")
     
-    mask_adapter = FractionMaskAdapter()
-    mask_fn = mask_adapter.get_mask_fn(layer_ratios)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    mask_fn = make_mask_fn(layer_ratios, device=device)
     
     print("Computing perplexity with pruning...")
     total_log_likelihood = 0.0
