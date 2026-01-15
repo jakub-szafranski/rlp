@@ -81,7 +81,7 @@ class PerplexityReward(RewardCalculator):
         if ppl_ratio >= max_ppl_ratio or sparsity >= max_sparsity:
             return np.clip(-(10.0 * sparsity), -3, -2)
         
-        sparsity_reward = np.tanh(self.sparsity_sensitivity * sparsity)
+        sparsity_reward = 10 * sparsity**2
 
         reward = self.quality_weight * ppl_reward + sparsity_reward
         reward += sparsity_bonus if sparsity >= min_sparsity else 0.0

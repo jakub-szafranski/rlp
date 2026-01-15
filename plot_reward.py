@@ -4,14 +4,14 @@ from mpl_toolkits.mplot3d import Axes3D
 from rl.reward import PerplexityReward
 
 # Create reward calculator
-reward_calc = PerplexityReward(quality_weight=0.5, ppl_sensitivity=1.5, sparsity_sensitivity=3.0)
+reward_calc = PerplexityReward(quality_weight=1, sparsity_sensitivity=3.0)
 
 # Assume baseline perplexity
 baseline_ppl = 10.0
 
 # Vary perplexity ratio and sparsity
-ratios = np.linspace(0.0, 1.5, 50)
-sparsities = np.linspace(0, 1, 50)
+ratios = np.linspace(0.0, 1, 50)
+sparsities = np.linspace(0, 0.5, 50)
 
 RR, SS = np.meshgrid(ratios, sparsities)
 rewards = np.zeros_like(RR)
