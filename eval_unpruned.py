@@ -131,7 +131,7 @@ if __name__ == "__main__":
         "--max_window_size",
         type=int,
         default=2048,
-        help="Maximum window size for perplexity calculation."
+        help="Maximum window size for perplexity calculation e.g. --max_window_size 2048"
     )
     args = parser.parse_args()
     

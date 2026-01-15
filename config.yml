@@ -55,38 +55,37 @@ data:
 # -----------------------------------------------------------------------------
 environment:
   max_seq_len: 2048          # max tokens for perplexity calculation
-  quality_weight: 0.5        # weight for quality (ppl/acc) vs sparsity reward
-  baseline_perplexity: 9.57  # optional: if set, use this constant baseline for speed
+  quality_weight: 1.3       # weight for quality (ppl/acc) vs sparsity reward
+  baseline_perplexity: 7.25  # optional: if set, use this constant baseline for speed
 
 # -----------------------------------------------------------------------------
-# TD3 Hyperparameters
+# SAC Hyperparameters
 # -----------------------------------------------------------------------------
-td3:
-  learning_rate: 1.0e-4        # Slightly higher than SAC as it's more stable
-  buffer_size: 10000           # Matched to your 5k step limit
-  batch_size: 128              # Better for continuous control
-  tau: 0.005                   # Target network update rate
-  gamma: 0.0                   # Still 0 for Contextual Bandit
+sac:
+  learning_rate: 1.0e-4        
+  buffer_size: 10000           
+  batch_size: 128              
+  tau: 0.005                   
+  gamma: 0.0                   # Immediate reward (Contextual Bandit)
   train_freq: 2
-  gradient_steps: 5            # High to extract more info per LLM eval
+  gradient_steps: 5            # High updates per eval to save data
   
-  # TD3 Specifics
-  policy_delay: 2              # Update actor every 2 critic updates (standard)
-  target_policy_noise: 0.2     # Noise added to target policy (smoothing)
-  target_noise_clip: 0.5       # Range to clip target noise
+  # SAC Specifics
+  ent_coef: 'auto'             # MUST be 'auto' for automatic tuning
+  target_entropy: 'auto'       
   
   # Policy network architecture
-  pi_layers: [256, 128]        # Classic TD3 architecture
-  qf_layers: [256, 128]
-  action_bias: 0.05            # initial bias for action mean (fraction to prune per layer)
+  pi_layers: [256, 128]        
+  qf_layers: [256, 128]        
+  action_bias: 0.05          # initial bias for action mean (fraction to prune per layer)
 
 # -----------------------------------------------------------------------------
 # Training
 # -----------------------------------------------------------------------------
 training:
-  total_timesteps: 15000
+  total_timesteps: 10000
   log_interval: 50
-  save_path: checkpoints/td3_pruning_agent
+  save_path: checkpoints/sac_pruning_agent
   device: cuda             
   verbose: 1
 

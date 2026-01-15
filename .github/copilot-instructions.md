@@ -53,7 +53,7 @@
     - Flow in `step(action)`:
       1. Optionally compute baseline perplexity on the unpruned model (for WikiText).
       2. Interpolate 8 control points to 32 layer fractions using cubic spline.
-      3. Build a `mask_fn` from the interpolated fractions using `FractionMaskAdapter`.
+      3. Build a `mask_fn` from the interpolated fractions using `make_mask_fn` from `pruning.create_pruning_mask`.
       4. Call `model.prune(mask_fn, storage='gpu')`.
       5. Compute metric using `self.metric_calculator.compute`.
       6. Read sparsity from `model.sparsity`.
@@ -89,7 +89,7 @@
       - Combines ±1 correctness signal with sparsity-based reward.
 
   - `utils.py` (RL):
-    - `FractionMaskAdapter` converts interpolated layer-wise fraction actions into the `mask_fn(layer_idx) -> bool tensor` expected by `PrunableLLM.prune`.
+    - Previously used `FractionMaskAdapter`, now replaced with `make_mask_fn` from `pruning.create_pruning_mask` for FLAP bias compensation.
 
 - `grouping_statistics/` & JSONs
   - Hold activation data and importance scores (e.g., `neuron_importance_up_proj.json`).

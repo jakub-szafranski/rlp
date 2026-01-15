@@ -90,7 +90,7 @@ class LLMPruningEnv(gym.Env):
         
         # Spaces
         self.action_space = spaces.Box(
-            low=0.0, high=1.0, shape=(8,), dtype=np.float32
+            low=0.0, high=0.4, shape=(8,), dtype=np.float32
         )
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, shape=(embed_dim,), dtype=np.float32
