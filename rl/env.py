@@ -165,7 +165,7 @@ class LLMPruningEnv(gym.Env):
         
         # Apply pruning
         mask_fn = make_mask_fn(layer_ratios.tolist(), device=self.device)
-        self.model.prune(mask_fn, storage="gpu")
+        self.model.prune(mask_fn)
         
         # Compute metric on pruned model
         metric_value = self.metric_calculator.compute(self.model, self._current_item)

@@ -55,7 +55,7 @@ data:
 # -----------------------------------------------------------------------------
 environment:
   max_seq_len: 2048          # max tokens for perplexity calculation
-  quality_weight: 1.3       # weight for quality (ppl/acc) vs sparsity reward
+  quality_weight: 0.999       # weight for quality (ppl/acc) vs sparsity reward
   baseline_perplexity: 7.25  # optional: if set, use this constant baseline for speed
 
 # -----------------------------------------------------------------------------
