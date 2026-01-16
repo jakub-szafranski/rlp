@@ -4,6 +4,7 @@ import argparse
 import yaml
 import torch
 import numpy as np
+import matplotlib.pyplot as plt
 from tqdm import tqdm
 from typing import Literal
 from stable_baselines3 import SAC
@@ -12,8 +13,9 @@ from stable_baselines3.common.logger import configure
 from transformers import AutoModelForCausalLM, AutoTokenizer, AutoModel
 
 from pruning import PrunableLLM
-from rl.env import LLMPruningEnv
+from rl.env import LLMPruningEnv, get_layer_ratios
 from rl.data_source import WikiTextDataSource, MMLUDataSource
+from pruning.create_pruning_mask import make_mask_fn
 
 
 def load_config(config_path: str = "config.yml") -> dict:
@@ -330,45 +332,97 @@ def evaluate(config: dict):
     
     deterministic = eval_conf.get("deterministic", True)
     
-    results = {"sparsity": [], "reward": [], "mean_fraction_pruned": []}
     if task == "perplexity":
-        results["perplexity"] = []
+        results = {"sparsity": [], "reward": [], "mean_fraction_pruned": [], "layer_ratios": []}
+        total_ll = 0.0
+        total_tc = 0
+        obs, _ = env.reset()
+        for _ in tqdm(range(len(test_data)), desc="Evaluating"):
+            action, _ = agent.predict(obs, deterministic=deterministic)
+            obs, reward, terminated, truncated, info = env.step(action)
+            
+            results["sparsity"].append(info["sparsity"])
+            results["reward"].append(reward)
+            results["mean_fraction_pruned"].append(info["mean_fraction_pruned"])
+            results["layer_ratios"].append(info["layer_ratios"])
+            
+            total_ll += info["log_likelihood"]
+            total_tc += info["token_count"]
+            
+            if terminated:
+                obs, _ = env.reset()
+        
+        perplexity = np.exp(-total_ll / total_tc) if total_tc > 0 else float('inf')
+        
+        # Plot per-layer sparsity
+        layer_ratios_array = np.array(results["layer_ratios"])
+        mean_per_layer = np.mean(layer_ratios_array, axis=0)
+        std_per_layer = np.std(layer_ratios_array, axis=0)
+        num_layers = layer_ratios_array.shape[1]
+        
+        plt.figure(figsize=(10, 6))
+        plt.errorbar(range(num_layers), mean_per_layer, yerr=std_per_layer, fmt='o-', capsize=5)
+        plt.xlabel('Layer Index')
+        plt.ylabel('Fraction Pruned')
+        plt.title('Mean Fraction Pruned per Layer with Standard Deviation')
+        plt.grid(True)
+        plt.savefig('layer_sparsity_perplexity.png')
+        plt.close()
+        
+        print("\n" + "=" * 60)
+        print("EVALUATION RESULTS")
+        print("=" * 60)
+        print(f"Perplexity: {perplexity:.2f}")
+        print(f"Mean Sparsity: {np.mean(results['sparsity']):.2%} ± {np.std(results['sparsity']):.2%}")
+        print(f"Mean Reward: {np.mean(results['reward']):.4f} ± {np.std(results['reward']):.4f}")
+        print(f"Mean Fraction Pruned: {np.mean(results['mean_fraction_pruned']):.2%} ± {np.std(results['mean_fraction_pruned']):.2%}")
+        print("Plot saved to layer_sparsity_perplexity.png")
+        print("=" * 60)
+        return {"perplexity": perplexity, "sparsity": np.mean(results['sparsity']), "mean_fraction_pruned": np.mean(results['mean_fraction_pruned'])}
     else:
-        results["correct"] = []
-    
-    obs, _ = env.reset()
-    for _ in tqdm(range(len(test_data)), desc="Evaluating"):
-        action, _ = agent.predict(obs, deterministic=deterministic)
-        obs, reward, terminated, truncated, info = env.step(action)
-        
-        results["sparsity"].append(info["sparsity"])
-        results["reward"].append(reward)
-        results["mean_fraction_pruned"].append(info["mean_fraction_pruned"])
-        
-        if task == "perplexity":
-            results["perplexity"].append(info["perplexity"])
-        else:
+        results = {"sparsity": [], "reward": [], "mean_fraction_pruned": [], "correct": [], "layer_ratios": []}
+        obs, _ = env.reset()
+        for _ in tqdm(range(len(test_data)), desc="Evaluating"):
+            action, _ = agent.predict(obs, deterministic=deterministic)
+            obs, reward, terminated, truncated, info = env.step(action)
+            
+            results["sparsity"].append(info["sparsity"])
+            results["reward"].append(reward)
+            results["mean_fraction_pruned"].append(info["mean_fraction_pruned"])
             results["correct"].append(info["correct"])
+            results["layer_ratios"].append(info["layer_ratios"])
+            
+            if terminated:
+                obs, _ = env.reset()
         
-        if terminated:
-            obs, _ = env.reset()
-    
-    print("\n" + "=" * 60)
-    print("EVALUATION RESULTS")
-    print("=" * 60)
-    
-    if task == "perplexity":
-        print(f"Mean Perplexity:      {np.mean(results['perplexity']):>10.2f} ± {np.std(results['perplexity']):>8.2f}")
-    else:
+        # Plot per-layer sparsity
+        layer_ratios_array = np.array(results["layer_ratios"])
+        mean_per_layer = np.mean(layer_ratios_array, axis=0)
+        std_per_layer = np.std(layer_ratios_array, axis=0)
+        num_layers = layer_ratios_array.shape[1]
+        
+        plt.figure(figsize=(10, 6))
+        plt.errorbar(range(num_layers), mean_per_layer, yerr=std_per_layer, fmt='o-', capsize=5)
+        plt.xlabel('Layer Index')
+        plt.ylabel('Fraction Pruned')
+        plt.title('Mean Fraction Pruned per Layer with Standard Deviation')
+        plt.grid(True)
+        plt.savefig('layer_sparsity_mmlu.png')
+        plt.close()
+        
+        print("\n" + "=" * 60)
+        print("EVALUATION RESULTS")
+        print("=" * 60)
+        
         accuracy = np.mean(results["correct"])
-        print(f"Accuracy:             {accuracy:>10.2%}")
-    
-    print(f"Mean Sparsity:        {np.mean(results['sparsity']):>10.2%} ± {np.std(results['sparsity']):>8.2%}")
-    print(f"Mean Reward:          {np.mean(results['reward']):>10.4f} ± {np.std(results['reward']):>8.4f}")
-    print(f"Mean Fraction Pruned: {np.mean(results['mean_fraction_pruned']):>10.2%} ± {np.std(results['mean_fraction_pruned']):>8.2%}")
-    print("=" * 60)
-    
-    return results
+        print(f"Accuracy: {accuracy:.2%}")
+        print(f"Mean Sparsity: {np.mean(results['sparsity']):.2%} ± {np.std(results['sparsity']):.2%}")
+        print(f"Mean Reward: {np.mean(results['reward']):.4f} ± {np.std(results['reward']):.4f}")
+        print(f"Mean Fraction Pruned: {np.mean(results['mean_fraction_pruned']):.2%} ± {np.std(results['mean_fraction_pruned']):.2%}")
+        print("Plot saved to layer_sparsity_mmlu.png")
+        print("=" * 60)
+        
+        return results
 
 
 if __name__ == "__main__":

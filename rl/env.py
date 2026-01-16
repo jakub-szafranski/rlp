@@ -178,6 +178,7 @@ class LLMPruningEnv(gym.Env):
         info = {
             "sparsity": sparsity,
             "mean_fraction_pruned": float(layer_ratios.mean()),
+            "layer_ratios": layer_ratios.tolist(),
         }
         
         if self.task == "perplexity":
