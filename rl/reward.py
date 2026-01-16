@@ -6,26 +6,24 @@ from abc import ABC, abstractmethod
 class RewardCalculator(ABC):
     """
     Base class for reward calculation in LLM pruning RL.
-    
-    Design notes for PPO compatibility:
-    - Rewards should ideally be unbounded or at least symmetric around 0
-    - The key is consistent scale across episodes
     """
-    
-    def __init__(self, quality_weight: float = 0.7):
-        """
-        Args:
-            quality_weight: Weight for quality metric (perplexity/correctness).
-                           Sparsity weight = 1 - quality_weight.
-                           Default 0.7 emphasizes quality over sparsity.
-        """
-        if not 0.0 <= quality_weight <= 1.0:
-            raise ValueError("quality_weight must be in [0, 1]")
-        self.quality_weight = quality_weight
     
     @abstractmethod
     def compute_reward(self, *args, **kwargs) -> float:
         pass
+
+    def calculate_sparsity_reward(self, sparsity: float) -> float:
+        min_sparsity = 0.2
+        max_sparsity = 0.3
+
+        base_formula = lambda x: 10 * x**2
+        if sparsity < min_sparsity:
+            reward = 150_000 * sparsity**8
+        elif sparsity > max_sparsity:
+            reward = 10000 * -(sparsity - max_sparsity)**4 + base_formula(max_sparsity)
+        else:
+            reward = base_formula(sparsity)
+        return np.clip(reward, 0, 1.5)
 
 
 class PerplexityReward(RewardCalculator):
@@ -39,7 +37,7 @@ class PerplexityReward(RewardCalculator):
     - Final reward in [-1, 1] (better for PPO value function)
     """
     
-    def __init__(self, quality_weight: float = 2, sparsity_sensitivity: float = 3.0):
+    def __init__(self, quality_weight: float = 2):
         """
         Args:
             quality_weight: Weight for perplexity term (0-1).
@@ -48,8 +46,7 @@ class PerplexityReward(RewardCalculator):
             sparsity_sensitivity: Scaling factor for tanh on sparsity.
                                  Higher = saturates reward for lower sparsity.
         """
-        super().__init__(quality_weight)
-        self.sparsity_sensitivity = sparsity_sensitivity
+        ...
     
     def compute_reward(
         self, 
@@ -68,24 +65,19 @@ class PerplexityReward(RewardCalculator):
         Returns:
             reward: Float in [-1, 1].
         """
-        max_ppl_ratio = 0.5 # Cap ratio to avoid extreme penalties
-        max_sparsity = 0.3   # Cap sparsity for reward scaling
-
-        min_sparsity = 0.1  # Minimum sparsity to get bonus
-        sparsity_bonus = 0.5  # Small bonus for any pruning
+        max_ppl_ratio = 0.45 # Cap ratio to avoid extreme penalties
         
         ppl_ratio = (pruned_perplexity - baseline_perplexity) / baseline_perplexity
         ppl_ratio = np.clip(ppl_ratio, 0, 1)
         ppl_reward = -6 * ppl_ratio**2
 
-        if ppl_ratio >= max_ppl_ratio or sparsity >= max_sparsity:
-            return np.clip(-(10.0 * sparsity), -3, -2)
+        if ppl_ratio >= max_ppl_ratio:
+            return -2.5
         
-        sparsity_reward = (1 + np.tanh(4 * sparsity)) * 10 * sparsity**2
+        sparsity_reward = self.calculate_sparsity_reward(sparsity)
 
-        reward = 2 * ppl_reward + sparsity_reward
-        reward += sparsity_bonus if sparsity >= min_sparsity else 0.0
-        return np.clip(float(reward), -2.0, 2.0)
+        reward = 1.5 * ppl_reward + 2 * sparsity_reward
+        return np.clip(float(reward), -2.5, 2.5)
 
 
 class CorrectnessReward(RewardCalculator):

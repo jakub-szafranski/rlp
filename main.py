@@ -302,6 +302,9 @@ def train(config: dict):
     save_path = train_conf.get("save_path", "sac_pruning_agent")
     agent.save(save_path)
     print(f"\nModel saved to: {save_path}")
+    buffer_save_path = train_conf.get("buffer_save_path", "replay_buffer")
+    agent.replay_buffer.save(buffer_save_path)
+    print(f"Replay buffer saved to: {buffer_save_path}")
 
 
 def evaluate(config: dict):

@@ -62,13 +62,13 @@ environment:
 # SAC Hyperparameters
 # -----------------------------------------------------------------------------
 sac:
-  learning_rate: 1.0e-4        
+  learning_rate: 3e-4        
   buffer_size: 10000           
-  batch_size: 128              
+  batch_size: 256              
   tau: 0.005                   
   gamma: 0.0                   # Immediate reward (Contextual Bandit)
   train_freq: 2
-  gradient_steps: 5            # High updates per eval to save data
+  gradient_steps: 2            # High updates per eval to save data
   
   # SAC Specifics
   ent_coef: 'auto'             # MUST be 'auto' for automatic tuning
@@ -83,9 +83,10 @@ sac:
 # Training
 # -----------------------------------------------------------------------------
 training:
-  total_timesteps: 10000
+  total_timesteps: 5000
   log_interval: 50
   save_path: checkpoints/sac_pruning_agent
+  buffer_save_path: checkpoints/replay_buffer
   device: cuda             
   verbose: 1
 
