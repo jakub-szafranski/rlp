@@ -48,30 +48,36 @@ class PerplexityReward(RewardCalculator):
         """
         ...
     
-    def compute_reward(self, pruned_ppl, baseline_ppl, sparsity):
-        # 1. Calculate PPL Ratio
-        # Avoid division by zero or negative
-        ppl_ratio = pruned_ppl / (baseline_ppl + 1e-6)
+    def compute_reward(
+        self, 
+        pruned_perplexity: float, 
+        baseline_perplexity: float, 
+        sparsity: float
+    ) -> float:
+        """
+        Compute combined reward from perplexity and sparsity.
         
-        # 2. Log Penalty (Soft constraint)
-        # If ratio is 1.0 (no degradation), penalty is 0.
-        # If ratio is 1.5 (huge degradation), penalty is high.
-        ppl_penalty = np.log(max(ppl_ratio, 1e-6))
+        Args:
+            pruned_perplexity: Perplexity of pruned model.
+            baseline_perplexity: Perplexity of unpruned model.
+            sparsity: Fraction of neurons pruned (0-1), from PrunableLLM.sparsity.
+            
+        Returns:
+            reward: Float in [-1, 1].
+        """
+        max_ppl_ratio = 0.45 # Cap ratio to avoid extreme penalties
         
-        # 3. Weights (Tune these!)
-        # Sparsity is 0.0 to 1.0. We want strong signal.
-        alpha_sparsity = 2.0 
-        
-        # PPL penalty weight.
-        # If PPL grows by 10% (ratio 1.1), log(1.1) approx 0.095.
-        # We want that to hurt more than the gain of ~5% sparsity (0.05).
-        # So beta should be around 1.0 to 5.0.
-        beta_ppl = 4.0 
+        ppl_ratio = (pruned_perplexity - baseline_perplexity) / baseline_perplexity
+        ppl_ratio = np.clip(ppl_ratio, 0, 1)
+        ppl_reward = -6 * ppl_ratio**2
 
-        reward = (alpha_sparsity * sparsity) - (beta_ppl * ppl_penalty)
+        if ppl_ratio >= max_ppl_ratio:
+            return -2.5
         
-        # Optional: Light clipping just for numerical stability, not logic
-        return np.clip(reward, -5.0, 5.0)
+        sparsity_reward = self.calculate_sparsity_reward(sparsity)
+
+        reward = 1.5 * ppl_reward + 2 * sparsity_reward
+        return np.clip(float(reward), -2.5, 2.5)
 
 
 class CorrectnessReward(RewardCalculator):

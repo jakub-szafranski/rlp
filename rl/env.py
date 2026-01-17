@@ -4,7 +4,7 @@ import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
 import torch
-from scipy.interpolate import CubicSpline
+# from scipy.interpolate import CubicSpline  # Commented out: no longer using spline
 
 from pruning import PrunableLLM
 from pruning.create_pruning_mask import make_mask_fn
@@ -12,20 +12,25 @@ from rl.metrics import PerplexityCalculator, MMLULoglikelihoodCalculator
 from rl.reward import PerplexityReward, CorrectnessReward
 
 
-def get_layer_ratios(action_vector, num_layers=32, num_control_points=8):
+def get_layer_ratios(action_vector, num_layers=32, num_control_points=32):  # Changed default from 8 to 32
     """
-    Convert 8 control point actions to 32 layer pruning ratios using cubic spline.
+    Convert 8 control point actions to 32 layer pruning ratios using cubic spline.  # OLD: 8 control points
     
     Args:
-        action_vector (np.array): Shape (num_control_points,). Values in [0, 1].
+        action_vector (np.array): Shape (num_control_points,). Values in [0, 1].  # Now 32
     Returns:
         np.array: Shape (num_layers,). Pruning ratios for each layer.
     """
-    x_control = np.linspace(0, num_layers - 1, num_control_points)
-    x_query = np.arange(num_layers)
-    cs = CubicSpline(x_control, action_vector, bc_type='clamped')
-    layer_ratios = cs(x_query)
-    layer_ratios = np.clip(layer_ratios, 0.0, 1.0)
+    # OLD CODE: Using cubic spline interpolation
+    # x_control = np.linspace(0, num_layers - 1, num_control_points)
+    # x_query = np.arange(num_layers)
+    # cs = CubicSpline(x_control, action_vector, bc_type='clamped')
+    # layer_ratios = cs(x_query)
+    # layer_ratios = np.clip(layer_ratios, 0.0, 1.0)
+    # return layer_ratios
+    
+    # NEW: Direct action_vector as layer_ratios (now 32 values)
+    layer_ratios = np.clip(action_vector, 0.0, 1.0)
     return layer_ratios
 
 
@@ -35,7 +40,7 @@ class LLMPruningEnv(gym.Env):
     
     This is a contextual bandit (single-step episodes):
     - Observation: text embedding from encoder
-    - Action: 8 control points (0-1) for cubic spline parametrization of pruning fractions per layer
+    - Action: 32 control points (0-1) for cubic spline parametrization of pruning fractions per layer  # OLD: 8 control points
     - Reward: quality (perplexity or correctness) + sparsity tradeoff
     
     Args:
@@ -78,6 +83,7 @@ class LLMPruningEnv(gym.Env):
         self.device = device
         self.task = task
         self.baseline_perplexity = baseline_perplexity
+        self.max_seq_len = max_seq_len
         
         # Components based on task
         
@@ -90,7 +96,7 @@ class LLMPruningEnv(gym.Env):
         
         # Spaces
         self.action_space = spaces.Box(
-            low=0.0, high=0.4, shape=(8,), dtype=np.float32
+            low=0.0, high=0.4, shape=(32,), dtype=np.float32  # Changed from 8 to 32 control points
         )
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, shape=(embed_dim,), dtype=np.float32
@@ -155,7 +161,7 @@ class LLMPruningEnv(gym.Env):
         """
         assert self._current_item is not None, "Call reset() first"
         
-        # Convert 8 control points to 32 layer ratios using cubic spline
+        # Convert 32 layer ratios directly (no spline)  # OLD: Convert 8 control points to 32 layer ratios using cubic spline
         layer_ratios = get_layer_ratios(action)
         
         # Compute baseline on unpruned model only if no baseline_perplexity supplied

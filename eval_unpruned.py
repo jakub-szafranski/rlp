@@ -125,7 +125,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--action",
         type=str,
-        help="Comma-separated list of 8 floats for pruning action (e.g., '0.0,0.3,0.3,0.3,0.3,0.3,0.3,0.0'). If not provided, evaluates unpruned model."
+        help="Comma-separated list of 32 floats for pruning action (e.g., '0.0,0.3,...'). If not provided, evaluates unpruned model."  # OLD: 8 floats
     )
     parser.add_argument(
         "--max_window_size",
@@ -143,8 +143,8 @@ if __name__ == "__main__":
     else:
         try:
             action = [float(x.strip()) for x in args.action.split(',')]
-            if len(action) != 8:
-                raise ValueError("Action must be exactly 8 floats.")
+            if len(action) != 32:  # Changed from 8 to 32
+                raise ValueError("Action must be exactly 32 floats.")  # Changed from 8 to 32
             print(f"Evaluating with pruning action: {action}")
             pruned_ppl, sparsity = evaluate_pruned(config, action, args.max_window_size)
         except ValueError as e:
