@@ -24,7 +24,7 @@ def get_pruning_mask_and_means(
         device: Device for torch tensors
         
     Returns:
-        mask: Boolean numpy array (True = keep, False = prune)
+        mask: Boolean torch tensor (True = keep, False = prune)
         prune_indices: Torch tensor of neuron indices to prune
         prune_means: Torch tensor of activation means for pruned neurons (for bias compensation)
     """
@@ -33,6 +33,10 @@ def get_pruning_mask_and_means(
     sorted_indices = layer_data["indices"]  # Most important first
     sorted_means = layer_data["means"]
     total = layer_data["total_neurons"]
+
+    if len(sorted_indices) != total or len(sorted_means) != total:
+        raise ValueError(f"Data length mismatch for layer {layer}: expected {total}, got {len(sorted_indices)} indices and {len(sorted_means)} means.")
+
     # Keep top (1-fraction), prune bottom fraction
     keep_count = int((1 - fraction) * total)
     keep_idx_list = sorted_indices[:keep_count]

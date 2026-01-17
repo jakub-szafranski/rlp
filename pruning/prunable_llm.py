@@ -16,6 +16,7 @@ class PrunableLLM:
     def __init__(self, model: PreTrainedModel):
         self.model: PreTrainedModel = model
         self._undo_pack: Optional[UndoPack] = None
+        print(f"Model parameters: {sum(p.numel() for p in model.parameters())}")
     
     @property
     def sparsity(self) -> float:

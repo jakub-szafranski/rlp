@@ -64,7 +64,7 @@ environment:
 sac:
   learning_rate: 3.0e-4        
   buffer_size: 10000           
-  batch_size: 256              
+  batch_size: 512              
   tau: 0.005                   
   gamma: 0.0                   # Immediate reward (Contextual Bandit)
   train_freq: 2
