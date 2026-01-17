@@ -303,7 +303,7 @@ def train(config: dict):
     agent.save(save_path)
     print(f"\nModel saved to: {save_path}")
     buffer_save_path = train_conf.get("buffer_save_path", "replay_buffer")
-    agent.replay_buffer.save(buffer_save_path)
+    agent.save_replay_buffer(buffer_save_path)
     print(f"Replay buffer saved to: {buffer_save_path}")
 
 
