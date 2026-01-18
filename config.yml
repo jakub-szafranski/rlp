@@ -32,7 +32,7 @@ data:
 environment:
   max_seq_len: 2048          # max tokens for perplexity calculation
   quality_weight: 0.999       # weight for quality (ppl/acc) vs sparsity reward
-  baseline_perplexity: 7.25  # optional: if set, use this constant baseline for speed
+  baseline_perplexity: 7.21  # optional: if set, use this constant baseline for speed
 
 # -----------------------------------------------------------------------------
 # SAC Hyperparameters
@@ -51,9 +51,8 @@ sac:
   target_entropy: 'auto'       
   
   # Policy network architecture
-  pi_layers: [256, 128]        
+  pi_layers: [512, 256]        
   qf_layers: [256, 128]        
-  action_bias: 0.05          # initial bias for action mean (fraction to prune per layer)
 
 # -----------------------------------------------------------------------------
 # Training
@@ -66,6 +65,8 @@ training:
   device: cuda             
   verbose: 1
 
+  pretrain_buffer_path: checkpoints/replay_buffer_pretrain
+  pretrain_steps: 5000
 # -----------------------------------------------------------------------------
 # Evaluation
 # -----------------------------------------------------------------------------

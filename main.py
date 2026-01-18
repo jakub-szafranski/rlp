@@ -15,7 +15,6 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, AutoModel
 from pruning import PrunableLLM
 from rl.env import LLMPruningEnv
 from rl.data_source import WikiTextDataSource, MMLUDataSource
-from pruning.create_pruning_mask import make_mask_fn
 
 
 def load_config(config_path: str = "config.yml") -> dict:
@@ -284,7 +283,26 @@ def train(config: dict):
         task=task, 
         log_interval=train_conf.get("log_interval", 50)
     )
-    agent.learn(total_timesteps=train_conf["total_timesteps"], callback=callback)
+    pretrain_buffer_path = train_conf["pretrain_buffer_path"]
+    if pretrain_buffer_path: 
+        agent.load_replay_buffer(pretrain_buffer_path)
+        print(f"Loaded {agent.replay_buffer.size()} transitions from {pretrain_buffer_path}")
+
+        pretrain_steps = train_conf["pretrain_steps"]
+        if pretrain_steps > 0:
+            print(f"Pre-training for {pretrain_steps} steps...")
+            for _ in tqdm.tqdm(range(pretrain_steps), desc="Pre-training"):
+                agent.train(gradient_steps=1, batch_size=sac_conf["batch_size"])
+
+            print("Pre-training complete.\n\n")
+
+    print(f"\nStarting online training for {train_conf['total_timesteps']} steps...")
+    agent.learn(
+        total_timesteps=train_conf["total_timesteps"], 
+        callback=callback,
+        reset_num_timesteps=False,
+        log_interval=train_conf.get("log_interval", 50)
+    )
     
     save_path = train_conf.get("save_path", "sac_pruning_agent")
     agent.save(save_path)
