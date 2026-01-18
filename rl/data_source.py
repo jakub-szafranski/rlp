@@ -164,13 +164,16 @@ class MMLUDataSource(DataSource):
         if self.num_shots > 0 and subject and subject in self._dev_examples:
             examples = self._dev_examples[subject][:self.num_shots]
             for ex in examples:
+                formatted += f"Question: {ex['question']}\n"
                 for i, choice in enumerate(ex['choices']):
                     formatted += f"{self.ANSWER_LETTERS[i]}. {choice}\n"
-                formatted += f"\nAnswer: {self.ANSWER_LETTERS[ex['answer']]}\n\n"
+                formatted += f"Answer: {self.ANSWER_LETTERS[ex['answer']]}\n\n"
         
+        # Add the actual question
+        formatted += f"Question: {question}\n"
         for i, choice in enumerate(choices):
             formatted += f"{self.ANSWER_LETTERS[i]}. {choice}\n"
-        formatted += "\nAnswer:"
+        formatted += "Answer:"
         return formatted
 
     def __iter__(self) -> Iterator[dict]:
