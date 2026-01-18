@@ -12,28 +12,6 @@ from rl.metrics import PerplexityCalculator, MMLULoglikelihoodCalculator
 from rl.reward import PerplexityReward, CorrectnessReward
 
 
-def get_layer_ratios(action_vector, num_layers=32, num_control_points=32):  # Changed default from 8 to 32
-    """
-    Convert 8 control point actions to 32 layer pruning ratios using cubic spline.  # OLD: 8 control points
-    
-    Args:
-        action_vector (np.array): Shape (num_control_points,). Values in [0, 1].  # Now 32
-    Returns:
-        np.array: Shape (num_layers,). Pruning ratios for each layer.
-    """
-    # OLD CODE: Using cubic spline interpolation
-    # x_control = np.linspace(0, num_layers - 1, num_control_points)
-    # x_query = np.arange(num_layers)
-    # cs = CubicSpline(x_control, action_vector, bc_type='clamped')
-    # layer_ratios = cs(x_query)
-    # layer_ratios = np.clip(layer_ratios, 0.0, 1.0)
-    # return layer_ratios
-    
-    # NEW: Direct action_vector as layer_ratios (now 32 values)
-    layer_ratios = np.clip(action_vector, 0.0, 1.0)
-    return layer_ratios
-
-
 class LLMPruningEnv(gym.Env):
     """
     Gymnasium environment for LLM pruning.
@@ -96,7 +74,7 @@ class LLMPruningEnv(gym.Env):
         
         # Spaces
         self.action_space = spaces.Box(
-            low=0.0, high=0.4, shape=(32,), dtype=np.float32  # Changed from 8 to 32 control points
+            low=0.0, high=0.5, shape=(64,), dtype=np.float32  # Changed from 8 to 32 control points
         )
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, shape=(embed_dim,), dtype=np.float32
@@ -160,17 +138,9 @@ class LLMPruningEnv(gym.Env):
             info: Dict with metrics
         """
         assert self._current_item is not None, "Call reset() first"
-        
-        # Convert 32 layer ratios directly (no spline)  # OLD: Convert 8 control points to 32 layer ratios using cubic spline
-        layer_ratios = get_layer_ratios(action)
-        
-        # Compute baseline on unpruned model only if no baseline_perplexity supplied
-        baseline_ll = None
-        if self.task == "perplexity" and self.baseline_perplexity is None:
-            baseline_ll, _ = self.metric_calculator.compute(self.model, self._current_item)
-        
+                        
         # Apply pruning
-        mask_fn = make_mask_fn(layer_ratios.tolist(), device=self.device)
+        mask_fn = make_mask_fn(list(action), device=self.device)
         self.model.prune(mask_fn)
         
         # Compute metric on pruned model
@@ -183,8 +153,8 @@ class LLMPruningEnv(gym.Env):
         # Build info dict and compute reward
         info = {
             "sparsity": sparsity,
-            "mean_fraction_pruned": float(layer_ratios.mean()),
-            "layer_ratios": layer_ratios.tolist(),
+            "mean_fraction_pruned": float(np.mean(action)),
+            "cluster_ratios": list(action),
         }
         
         if self.task == "perplexity":
@@ -194,11 +164,8 @@ class LLMPruningEnv(gym.Env):
                 # Compute per-doc perplexity for reward. If a config baseline
                 # is provided, use it directly for speed; otherwise compute
                 # the baseline from the unpruned model's log-likelihood.
-                if self.baseline_perplexity is not None:
-                    baseline_ppl = float(self.baseline_perplexity)
-                    baseline_ll = -token_count * np.log(baseline_ppl)
-                else:
-                    baseline_ppl = np.exp(-baseline_ll / token_count)
+                baseline_ppl = float(self.baseline_perplexity)
+                baseline_ll = -token_count * np.log(baseline_ppl)
 
                 pruned_ppl = np.exp(-pruned_ll / token_count)
                 reward = self.reward_calculator.compute_reward(pruned_ppl, baseline_ppl, sparsity)

@@ -1,32 +1,8 @@
 # =============================================================================
-# LLM Pruning with TD3 - Configuration
+# LLM Pruning - Configuration
 # =============================================================================
 
 random_state: 42
-
-# -----------------------------------------------------------------------------
-# Grouping (clustering neurons) - now simplified to importance-based pruning
-# -----------------------------------------------------------------------------
-grouping:
-  n_samples: 100
-  percentile_threshold: 70
-  layers_grouped: 2
-  random_state: 42
-  
-  dim_reduction:
-    name: UMAP
-    n_components: 40
-  
-  clustering:
-    name: KMeansConstrained
-    k: 16
-    group_size_deviation: 0.4
-
-# -----------------------------------------------------------------------------
-# Neuron Importance (for simplified pruning)
-# -----------------------------------------------------------------------------
-importance:
-  path: neuron_importance_up_proj.json
 
 # -----------------------------------------------------------------------------
 # Model (LLM to prune)

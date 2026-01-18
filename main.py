@@ -275,19 +275,6 @@ def train(config: dict):
     logger = configure(folder="./logs/", format_strings=["stdout", "csv", "tensorboard"])
     agent.set_logger(logger)
     
-    # action_bias_target = sac_conf.get("action_bias", 0.05)
-
-    # if action_bias_target != 0.0:
-    #     rl_action_target = (2 * action_bias_target) - 1
-    #     raw_bias = np.arctanh(np.clip(rl_action_target, -0.999, 0.999))
-    #     with torch.no_grad():
-    #         action_net = agent.policy.actor.mu
-    #         action_net.weight.data *= 0.1 
-    #         action_net.bias.copy_(torch.full_like(action_net.bias, float(raw_bias)))
-            
-    #     print(f"  Initialized actor to start at {action_bias_target*100}% pruning (Bias: {raw_bias:.4f})")
-
-    
     print(f"\nStarting training for {train_conf['total_timesteps']} steps...")
     print("=" * 60)
     
@@ -336,7 +323,7 @@ def evaluate(config: dict):
     deterministic = eval_conf.get("deterministic", True)
     
     if task == "perplexity":
-        results = {"sparsity": [], "reward": [], "mean_fraction_pruned": [], "layer_ratios": []}
+        results = {"sparsity": [], "reward": [], "mean_fraction_pruned": [], "cluster_ratios": []}
         total_ll = 0.0
         total_tc = 0
         obs, _ = env.reset()
@@ -347,7 +334,7 @@ def evaluate(config: dict):
             results["sparsity"].append(info["sparsity"])
             results["reward"].append(reward)
             results["mean_fraction_pruned"].append(info["mean_fraction_pruned"])
-            results["layer_ratios"].append(info["layer_ratios"])
+            results["cluster_ratios"].append(info["cluster_ratios"])
             
             total_ll += info["log_likelihood"]
             total_tc += info["token_count"]
@@ -358,7 +345,7 @@ def evaluate(config: dict):
         perplexity = np.exp(-total_ll / total_tc) if total_tc > 0 else float('inf')
         
         # Plot per-layer sparsity
-        layer_ratios_array = np.array(results["layer_ratios"])
+        layer_ratios_array = np.array(results["cluster_ratios"])
         mean_per_layer = np.mean(layer_ratios_array, axis=0)
         std_per_layer = np.std(layer_ratios_array, axis=0)
         num_layers = layer_ratios_array.shape[1]
@@ -383,7 +370,7 @@ def evaluate(config: dict):
         print("=" * 60)
         return {"perplexity": perplexity, "sparsity": np.mean(results['sparsity']), "mean_fraction_pruned": np.mean(results['mean_fraction_pruned'])}
     else:
-        results = {"sparsity": [], "reward": [], "mean_fraction_pruned": [], "correct": [], "layer_ratios": []}
+        results = {"sparsity": [], "reward": [], "mean_fraction_pruned": [], "correct": [], "cluster_ratios": []}
         obs, _ = env.reset()
         for _ in tqdm(range(len(test_data)), desc="Evaluating"):
             action, _ = agent.predict(obs, deterministic=deterministic)
@@ -393,13 +380,13 @@ def evaluate(config: dict):
             results["reward"].append(reward)
             results["mean_fraction_pruned"].append(info["mean_fraction_pruned"])
             results["correct"].append(info["correct"])
-            results["layer_ratios"].append(info["layer_ratios"])
+            results["cluster_ratios"].append(info["cluster_ratios"])
             
             if terminated:
                 obs, _ = env.reset()
         
         # Plot per-layer sparsity
-        layer_ratios_array = np.array(results["layer_ratios"])
+        layer_ratios_array = np.array(results["cluster_ratios"])
         mean_per_layer = np.mean(layer_ratios_array, axis=0)
         std_per_layer = np.std(layer_ratios_array, axis=0)
         num_layers = layer_ratios_array.shape[1]
