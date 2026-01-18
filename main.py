@@ -13,7 +13,7 @@ from stable_baselines3.common.logger import configure
 from transformers import AutoModelForCausalLM, AutoTokenizer, AutoModel
 
 from pruning import PrunableLLM
-from rl.env import LLMPruningEnv, get_layer_ratios
+from rl.env import LLMPruningEnv
 from rl.data_source import WikiTextDataSource, MMLUDataSource
 from pruning.create_pruning_mask import make_mask_fn
 
