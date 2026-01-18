@@ -65,7 +65,7 @@ training:
   device: cuda             
   verbose: 1
 
-  pretrain_buffer_path: checkpoints/replay_buffer_pretrain
+  pretrain_buffer_path: checkpoints/replay_buffer
   pretrain_steps: 5000
 # -----------------------------------------------------------------------------
 # Evaluation

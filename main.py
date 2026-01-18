@@ -291,7 +291,7 @@ def train(config: dict):
         pretrain_steps = train_conf["pretrain_steps"]
         if pretrain_steps > 0:
             print(f"Pre-training for {pretrain_steps} steps...")
-            for _ in tqdm.tqdm(range(pretrain_steps), desc="Pre-training"):
+            for _ in tqdm(range(pretrain_steps), desc="Pre-training"):
                 agent.train(gradient_steps=1, batch_size=sac_conf["batch_size"])
 
             print("Pre-training complete.\n\n")
