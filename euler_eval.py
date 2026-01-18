@@ -84,7 +84,7 @@ class EvalPrunableLLM:
         """Get pruning action from agent based on input text."""
         observation = self._encode_text(text)
         action, _ = self.agent.predict(observation, deterministic=self.deterministic)
-        action = [0 for _ in action] # TEMPORARY TO DISABLE PRUNING!!!! DELETE TODO: !!!!!
+        action = [0 for _ in range(64)] # TEMPORARY TO DISABLE PRUNING!!!! DELETE TODO: !!!!!
         return action
     
     def _extract_text_from_inputs(self, input_ids: torch.Tensor) -> str:
