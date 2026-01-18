@@ -24,7 +24,7 @@ encoder:
 data:
   dataset: wikitext          # wikitext or mmlu
   train_samples: null       # max samples for training (null for all)
-  mmlu_subjects: null    # list of subjects or null for all (only for mmlu)
+  mmlu_subjects: ['']    # list of subjects or null for all (only for mmlu)
 
 # -----------------------------------------------------------------------------
 # Environment

@@ -1,6 +1,7 @@
 from typing import Union
 import numpy as np
 import torch
+import torch.nn.functional as F
 from abc import ABC, abstractmethod
 from pruning import PrunableLLM
 
@@ -108,90 +109,61 @@ class MMLULoglikelihoodCalculator(MetricCalculator):
     
     def __init__(self, tokenizer):
         super().__init__(tokenizer)
-    
+
     @torch.no_grad()
-    def _compute_choice_loglikelihood(
-        self, 
-        model: PrunableLLM, 
-        prompt: str, 
-        choice_text: str
-    ) -> float:
-        """
-        Compute log P(choice_text | prompt).
-        
-        This computes the sum of log probabilities for each token in choice_text,
-        conditioned on the prompt.
-        """
+    def compute(self, model: PrunableLLM, item: dict) -> float:
         device = next(model.parameters()).device
-        
-        # Tokenize prompt and choice separately
-        prompt_tokens = self.tokenizer.encode(prompt, add_special_tokens=False)
-        choice_tokens = self.tokenizer.encode(choice_text, add_special_tokens=False)
-        
-        if not choice_tokens:
-            return float('-inf')
-        
-        full_tokens = prompt_tokens + choice_tokens
-        input_ids = torch.tensor([full_tokens], device=device)
-        
-        outputs = model(input_ids)
-        logits = outputs.logits
-        
-        start_idx = len(prompt_tokens) - 1
-        end_idx = start_idx + len(choice_tokens)
-        
-        # Get logits for positions that predict choice tokens
-        choice_logits = logits[:, start_idx:end_idx, :]
-        
-        # Get the actual choice token ids
-        choice_ids = torch.tensor([choice_tokens], device=device)
-        
-        # Compute log probabilities
-        log_probs = torch.nn.functional.log_softmax(choice_logits, dim=-1)
-        
-        # Gather log probs for the actual choice tokens
-        token_log_probs = torch.gather(
-            log_probs, 2, choice_ids.unsqueeze(-1)
-        ).squeeze(-1)
-        
-        # Sum log probs (joint probability of the choice sequence)
-        total_log_prob = token_log_probs.sum().item()
-        
-        return total_log_prob
-    
-    @torch.no_grad()
-    def compute(self, model: PrunableLLM, item: dict) -> bool:
-        """
-        Compute MMLU correctness using loglikelihood scoring.
-        
-        Uses full choice text with length normalization to match
-        lm-evaluation-harness and SOTA benchmarks.
-        
-        Args:
-            model: The language model.
-            item: Dict from MMLUDataSource with 'text', 'choices', 'answer_idx'.
-            
-        Returns:
-            True if model's highest-likelihood choice matches gold answer.
-        """
-        prompt = item["text"]  # "Question: ...\nA. ...\n...\nAnswer:"
+        prompt = item["text"]
         choices = item["choices"]
         gold_idx = item["answer_idx"]
         
-        # Compute normalized loglikelihood for each choice
-        normalized_lls = []
-        for i, choice in enumerate(choices):
-            # Full choice text (SOTA approach)
-            choice_text = f" {self.ANSWER_LETTERS[i]}. {choice}"
-            ll = self._compute_choice_loglikelihood(model, prompt, choice_text)
+        prompt_tokens = self.tokenizer.encode(prompt, add_special_tokens=False)
+        formatted_choices = [f" {self.ANSWER_LETTERS[i]}. {choice}" for i, choice in enumerate(choices)]
+        choice_tokens_list = [self.tokenizer.encode(c, add_special_tokens=False) for c in formatted_choices]
+        
+        full_sequences = [prompt_tokens + c_tokens for c_tokens in choice_tokens_list]
+        choice_lengths = [len(c) for c in choice_tokens_list]
+        max_len = max(len(s) for s in full_sequences)
+        
+        input_ids_list = []
+        attention_masks = []
+        position_ids_list = []
+        
+        pad_id = self.tokenizer.pad_token_id if self.tokenizer.pad_token_id is not None else 0
+        
+        for seq in full_sequences:
+            seq_len = len(seq)
+            pad_len = max_len - seq_len
             
-            # Normalize by token count to avoid length bias
-            choice_tokens = self.tokenizer.encode(choice_text, add_special_tokens=False)
-            choice_length = len(choice_tokens)
-            normalized_ll = ll / choice_length if choice_length > 0 else float('-inf')
-            normalized_lls.append(normalized_ll)
+            # Left padding
+            input_ids_list.append([pad_id] * pad_len + seq)
+            attention_masks.append([0] * pad_len + [1] * seq_len)
+            
+            pos_ids = [0] * pad_len + list(range(seq_len))
+            position_ids_list.append(pos_ids)
+            
+        input_ids = torch.tensor(input_ids_list, device=device)
+        attention_mask = torch.tensor(attention_masks, device=device)
+        position_ids = torch.tensor(position_ids_list, device=device)
         
-        # Select highest normalized loglikelihood
-        predicted_idx = int(np.argmax(normalized_lls))
+        outputs = model(input_ids, attention_mask=attention_mask, position_ids=position_ids)
+        logits = outputs.logits 
         
-        return predicted_idx == gold_idx
+        log_probs = F.log_softmax(logits, dim=-1)
+        normalized_lls = []
+        
+        for i in range(len(choices)):
+            c_len = choice_lengths[i]
+            if c_len == 0:
+                normalized_lls.append(float('-inf'))
+                continue
+            
+            target_token_ids = input_ids[i, -c_len:].unsqueeze(-1)
+            target_logits = log_probs[i, -c_len-1 : -1]
+            
+            token_log_probs = torch.gather(target_logits, 1, target_token_ids).squeeze(-1)
+            normalized_lls.append(token_log_probs.sum().item() / c_len)
+            
+        gold_ll = normalized_lls[gold_idx]
+        wrong_lls = [ll for i, ll in enumerate(normalized_lls) if i != gold_idx]
+        return float(gold_ll - max(wrong_lls))

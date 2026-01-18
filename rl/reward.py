@@ -14,7 +14,7 @@ class RewardCalculator(ABC):
 
     def calculate_sparsity_reward(self, sparsity: float) -> float:
         min_sparsity = 0.2
-        max_sparsity = 0.3
+        max_sparsity = 0.35
 
         base_formula = lambda x: 10 * x**2
         if sparsity < min_sparsity:
@@ -85,24 +85,21 @@ class CorrectnessReward(RewardCalculator):
     Computes reward based on task correctness (e.g., MMLU, multiple choice) and sparsity.
     """
     
-    def __init__(self, quality_weight: float = 0.7, sparsity_sensitivity: float = 3.0):
-        super().__init__(quality_weight)
-        self.sparsity_sensitivity = sparsity_sensitivity
+    def __init__(self, quality_weight: float = 0.7):
+        ...
     
-    def compute_reward(self, correct: bool, sparsity: float) -> float:
-        """
-        Compute combined reward from correctness and sparsity.
-        
-        Args:
-            correct: Whether the model's answer was correct.
-            sparsity: Fraction of neurons pruned (0-1), from PrunableLLM.sparsity.
+    def compute_reward(self, margin: float, sparsity: float) -> float:
+        correct_bonus = 5
+
+        sparsity_reward = self.calculate_sparsity_reward(sparsity)
+
+        is_correct = margin > 0
+        if is_correct:
+            reward = min(correct_bonus * min(margin, 1.0), 1.5)
+            reward += 2*sparsity_reward
+        else:
+            reward = max(-1.5, -correct_bonus * min(-margin, 1.0))
+            reward += sparsity_reward
             
-        Returns:
-            reward: Float in [-1, 1].
-        """
-        sparsity_reward = np.tanh(self.sparsity_sensitivity * sparsity)
-        correctness_reward = 1.0 if correct else -1.0
-        
-        reward = self.quality_weight * correctness_reward + sparsity_reward
         return float(reward)
 
