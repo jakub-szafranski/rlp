@@ -118,7 +118,7 @@ class MMLULoglikelihoodCalculator(MetricCalculator):
         gold_idx = item["answer_idx"]
         
         prompt_tokens = self.tokenizer.encode(prompt, add_special_tokens=False)
-        formatted_choices = [f" {self.ANSWER_LETTERS[i]}. {choice}" for i, choice in enumerate(choices)]
+        formatted_choices = [f" {letter}" for letter in self.ANSWER_LETTERS]
         choice_tokens_list = [self.tokenizer.encode(c, add_special_tokens=False) for c in formatted_choices]
         
         full_sequences = [prompt_tokens + c_tokens for c_tokens in choice_tokens_list]

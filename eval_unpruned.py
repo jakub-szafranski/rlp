@@ -39,27 +39,77 @@ def evaluate_unpruned(config: dict, task: str, max_window_size: int):
     prunable_llm, tokenizer = load_model(config)
     
     if task == "mmlu":
-        print("Loading MMLU test data...")
-        test_data = MMLUDataSource(split="test", subjects=config['data']['mmlu_subjects'])
-        print(f"  Test samples: {len(test_data)}")
+        subjects = config['data']['mmlu_subjects']
+        print(f"Evaluating MMLU on {len(subjects)} subjects...")
+        
         calculator = MMLULoglikelihoodCalculator(tokenizer)
         
-        print("Computing accuracy...")
-        correct = 0
+        subject_results = {}
+        overall_start_time = time.time()
         
-        start_time = time.time()
-        for item in tqdm(test_data, desc="Evaluating"):
-            diff = calculator.compute(prunable_llm, item)
-            if diff > 0:
-                correct += 1
-        end_time = time.time()
+        # Iterate through each subject
+        for subject in subjects:
+            print(f"\n{'='*60}")
+            print(f"Subject: {subject}")
+            print(f"{'='*60}")
+            
+            # Load data for this specific subject
+            test_data = MMLUDataSource(
+                split="test", 
+                subjects=[subject],
+                num_shots=5
+            )
+            print(f"  Test samples: {len(test_data)}")
+            
+            # Evaluate on this subject
+            correct = 0
+            subject_start_time = time.time()
+            
+            for item in tqdm(test_data, desc=f"Evaluating {subject}"):
+                diff = calculator.compute(prunable_llm, item)
+                if diff > 0:
+                    correct += 1
+            
+            subject_end_time = time.time()
+            subject_eval_time = subject_end_time - subject_start_time
+            
+            # Calculate accuracy for this subject
+            subject_accuracy = correct / len(test_data) if len(test_data) > 0 else 0.0
+            subject_results[subject] = {
+                'accuracy': subject_accuracy,
+                'correct': correct,
+                'total': len(test_data),
+                'time': subject_eval_time
+            }
+            
+            print(f"  Accuracy: {subject_accuracy:.2%} ({correct}/{len(test_data)})")
+            print(f"  Time: {subject_eval_time:.2f}s")
         
-        eval_time = end_time - start_time
-        print(f"Evaluation time: {eval_time:.2f} seconds")
+        overall_end_time = time.time()
+        total_eval_time = overall_end_time - overall_start_time
         
-        accuracy = correct / len(test_data)
-        print(f"\nUnpruned Accuracy: {accuracy:.2%}")
-        return accuracy
+        # Calculate overall accuracy (average across subjects)
+        overall_accuracy = sum(r['accuracy'] for r in subject_results.values()) / len(subjects)
+        
+        # Calculate total samples
+        total_correct = sum(r['correct'] for r in subject_results.values())
+        total_samples = sum(r['total'] for r in subject_results.values())
+        
+        # Print summary
+        print(f"\n{'='*60}")
+        print("SUMMARY")
+        print(f"{'='*60}")
+        print(f"\nPer-Subject Results:")
+        for subject, result in sorted(subject_results.items(), key=lambda x: x[1]['accuracy'], reverse=True):
+            print(f"  {subject:30s}: {result['accuracy']:6.2%} ({result['correct']:3d}/{result['total']:3d})")
+        
+        print(f"\n{'='*60}")
+        print(f"Overall Accuracy (macro-avg): {overall_accuracy:.2%}")
+        print(f"Overall Accuracy (micro-avg): {total_correct/total_samples:.2%} ({total_correct}/{total_samples})")
+        print(f"Total Evaluation Time: {total_eval_time:.2f}s")
+        print(f"{'='*60}")
+        
+        return overall_accuracy
     else:
         print("Loading WikiText test data...")
         test_data = WikiTextDataSource(split="test")
