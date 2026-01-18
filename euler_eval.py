@@ -58,7 +58,7 @@ class EvalPrunableLLM:
         self.encoder = encoder
         self.encoder_tokenizer = encoder_tokenizer
         self.agent = agent
-        self.device = device
+        self.device = torch.device(device)
         self.deterministic = deterministic
         
         self.encoder.eval()
