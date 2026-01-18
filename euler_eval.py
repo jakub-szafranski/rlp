@@ -166,10 +166,6 @@ class EvalPrunableLLM:
     @property
     def config(self):
         return self.prunable_llm.config
-    
-    @property
-    def device(self):
-        return next(self.prunable_llm.model.parameters()).device
 
 
 
