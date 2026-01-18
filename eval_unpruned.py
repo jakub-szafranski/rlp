@@ -84,6 +84,11 @@ def evaluate_unpruned(config: dict, task: str, max_window_size: int):
             
             print(f"  Accuracy: {subject_accuracy:.2%} ({correct}/{len(test_data)})")
             print(f"  Time: {subject_eval_time:.2f}s")
+            
+            # Free memory
+            del test_data
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
         
         overall_end_time = time.time()
         total_eval_time = overall_end_time - overall_start_time

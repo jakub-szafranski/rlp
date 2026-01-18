@@ -93,7 +93,7 @@ class LLMPruningEnv(gym.Env):
             text,
             return_tensors="pt",
             truncation=True,
-            max_length=1024,
+            max_length=512,
             padding=True,
         ).to(self.device)
         
