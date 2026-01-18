@@ -266,7 +266,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     
-    with open("config.yaml", "r") as f:
+    with open("config.yml", "r") as f:
         config = yaml.safe_load(f)
 
     if args.tasks == ["all"]:
@@ -274,6 +274,7 @@ if __name__ == "__main__":
     else:
         tasks = args.tasks
     
+    print("Evaluation tasks:", tasks)
     results = run_lm_eval(
         config=config,
         tasks=tasks,
