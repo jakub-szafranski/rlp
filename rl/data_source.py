@@ -1,5 +1,6 @@
 
 import re
+import numpy as np
 from datasets import load_dataset
 from typing import Iterator, Optional
 from abc import ABC, abstractmethod
@@ -144,12 +145,17 @@ class MMLUDataSource(DataSource):
             
             # ADD THIS - load dev examples for few-shot if needed
             if self.num_shots > 0:
-                dev_dataset = load_dataset("cais/mmlu", "all", split="dev")
-                for item in dev_dataset:
-                    subject = item["subject"]
-                    if subject not in self._dev_examples:
-                        self._dev_examples[subject] = []
-                    self._dev_examples[subject].append(item)
+                if self.split == "auxiliary_train":
+                    # For auxiliary_train, we'll use the first examples from the dataset itself
+                    # We need to do this after filtering, so we'll handle it differently
+                    pass  # Will be handled in __iter__
+                else:
+                    dev_dataset = load_dataset("cais/mmlu", "all", split="dev")
+                    for item in dev_dataset:
+                        subject = item["subject"]
+                        if subject not in self._dev_examples:
+                            self._dev_examples[subject] = []
+                        self._dev_examples[subject].append(item)
 
     def format_question(self, question: str, choices: list[str], subject: str = None) -> str:
         """Format question with lettered choices and optional few-shot examples."""
@@ -171,14 +177,24 @@ class MMLUDataSource(DataSource):
 
     def __iter__(self) -> Iterator[dict]:
         self._load()
+
+        # ADD THIS - handle auxiliary_train few-shot examples
+        if self.num_shots > 0 and self.split == "auxiliary_train":
+            # Just take first num_shots examples since there are no subjects
+            # make it random
+            first_examples = list(self._dataset.select(np.random.choice(
+                range(len(self._dataset)), self.num_shots, replace=False
+            )))
+            self._dev_examples[''] = first_examples  
+        
         for item in self._dataset:
             question = item["question"]
             choices = item["choices"]
             answer_idx = item["answer"]
-            subject = item["subject"]  # ADD THIS
+            subject = item["subject"]
 
             yield {
-                "text": self.format_question(question, choices, subject),  # MODIFY THIS
+                "text": self.format_question(question, choices, subject),
                 "question": question,
                 "choices": choices,
                 "answer_idx": answer_idx,

@@ -45,7 +45,7 @@ def evaluate_unpruned_mmlu(config: dict):
     """Evaluate unpruned model on MMLU train set and save correct answers."""
     prunable_llm, tokenizer = load_model(config)
     
-    train_data = MMLUDataSource(split="train", subjects=["auxiliary_train"])
+    train_data = MMLUDataSource(split="auxiliary_train")
     print(f"  Train samples: {len(train_data)}")
     
     calculator = MMLULoglikelihoodCalculator(tokenizer)
