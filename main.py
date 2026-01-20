@@ -16,6 +16,8 @@ from pruning import PrunableLLM
 from rl.env import LLMPruningEnv
 from rl.data_source import WikiTextDataSource, MMLUDataSource
 
+import os
+os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1" # Disable HF progress bars for cleaner output
 
 def load_config(config_path: str = "config.yml") -> dict:
     with open(config_path, "r") as f:
@@ -289,7 +291,7 @@ def train(config: dict):
         print(f"Loaded {agent.replay_buffer.size()} transitions from {pretrain_buffer_path}")
 
         pretrain_steps = train_conf["pretrain_steps"]
-        if pretrain_steps > 0:
+        if pretrain_steps:
             print(f"Pre-training for {pretrain_steps} steps...")
             for _ in tqdm(range(pretrain_steps), desc="Pre-training"):
                 agent.train(gradient_steps=1, batch_size=sac_conf["batch_size"])
