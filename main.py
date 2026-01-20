@@ -258,18 +258,22 @@ def train(config: dict):
     agent = SAC(
         "MlpPolicy",
         env,
-        learning_rate=sac_conf.get("learning_rate", 1e-4),
-        buffer_size=sac_conf.get("buffer_size", 10000),
-        batch_size=sac_conf.get("batch_size", 128),
-        tau=sac_conf.get("tau", 0.005),
-        gamma=sac_conf.get("gamma", 0.0),
-        train_freq=sac_conf.get("train_freq", 2),
-        gradient_steps=sac_conf.get("gradient_steps", 5),
-        ent_coef=sac_conf.get("ent_coef", "auto"),
-        target_entropy=sac_conf.get("target_entropy", "auto"),
+        learning_rate=sac_conf["learning_rate"],
+        buffer_size=sac_conf["buffer_size"],
+        learning_starts=sac_conf["learning_starts"],
+        batch_size=sac_conf["batch_size"],
+        tau=sac_conf["tau"],
+        gamma=sac_conf["gamma"],
+        train_freq=sac_conf["train_freq"],
+        gradient_steps=sac_conf["gradient_steps"],
+        use_sde=sac_conf["use_sde"],
+        sde_sample_freq=sac_conf["sde_sample_freq"],
+        use_sde_at_warmup=sac_conf["use_sde_at_warmup"],
+        ent_coef=sac_conf["ent_coef"],
+        target_entropy=sac_conf["target_entropy"],
         policy_kwargs=policy_kwargs,
-        verbose=train_conf.get("verbose", 1),
-        seed=config.get("random_state", 42),
+        verbose=train_conf["verbose"],
+        seed=config["random_state"],
     )
     
     # Configure logging for monitoring RL metrics
@@ -283,7 +287,7 @@ def train(config: dict):
     callback = MetricsCallback(
         total_timesteps=train_conf["total_timesteps"],
         task=task, 
-        log_interval=train_conf.get("log_interval", 50)
+        log_interval=train_conf["log_interval"]
     )
     pretrain_buffer_path = train_conf["pretrain_buffer_path"]
     if pretrain_buffer_path: 
@@ -302,7 +306,6 @@ def train(config: dict):
     agent.learn(
         total_timesteps=train_conf["total_timesteps"], 
         callback=callback,
-        reset_num_timesteps=False,
         log_interval=train_conf.get("log_interval", 50)
     )
     
