@@ -2,7 +2,7 @@ from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 from rl.reward import PerplexityReward, CorrectnessReward
 
-reward = "mmlu" # mmlu or ppl
+reward = "ppl" # mmlu or ppl
 if reward == "ppl":
     ppl_reward = PerplexityReward()
 

@@ -145,10 +145,8 @@ class EvalPrunableLLM:
             self.prunable_llm.prune(mask_fn)
             
             try:
-                # Run generation
                 output = self.prunable_llm.generate(*args, **kwargs)
             finally:
-                # Always undo pruning
                 self.prunable_llm.undo_prune()
             
             return output

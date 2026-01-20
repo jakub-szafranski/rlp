@@ -30,29 +30,36 @@ data:
 # Environment
 # -----------------------------------------------------------------------------
 environment:
-  max_seq_len: 2048          # max tokens for perplexity calculation
+  max_seq_len: 4096          # max tokens for perplexity calculation
   quality_weight: 0.999       # weight for quality (ppl/acc) vs sparsity reward
-  baseline_perplexity: 7.21  # optional: if set, use this constant baseline for speed
+  baseline_perplexity: 7.1  # optional: if set, use this constant baseline for speed
 
 # -----------------------------------------------------------------------------
 # SAC Hyperparameters
 # -----------------------------------------------------------------------------
+# Big training: change buffer: 50k, episodes: 50k, learning_starts: 5k (or multiply by 2)
 sac:
   learning_rate: 3.0e-4        
-  buffer_size: 10000           
+  buffer_size: 5000
+  learning_starts: 1000        # Collect random steps before training starts           
   batch_size: 512              
-  tau: 0.005                   
+  tau: 0.02                   
   gamma: 0.0                   # Immediate reward (Contextual Bandit)
-  train_freq: 2
-  gradient_steps: 2            # High updates per eval to save data
+  train_freq: 1
+  gradient_steps: 10            # High updates per eval to save data
   
+  # Exploration
+  use_sde: True                # CRITICAL: Generalized State Dependent Exploration
+  sde_sample_freq: -1          # Sample noise once per episode (consistent exploration)
+  use_sde_at_warmup: True      # Even during warmup, use structured noise
+
   # SAC Specifics
   ent_coef: 'auto'             # MUST be 'auto' for automatic tuning
   target_entropy: 'auto'       
   
   # Policy network architecture
-  pi_layers: [512, 256]        
-  qf_layers: [256, 128]        
+  pi_layers: [768, 512]        
+  qf_layers: [768, 512]        
 
 # -----------------------------------------------------------------------------
 # Training
@@ -66,7 +73,7 @@ training:
   verbose: 1
 
   pretrain_buffer_path: checkpoints/replay_buffer
-  pretrain_steps: 5000
+  pretrain_steps: null # set to null to skip pretraining
 # -----------------------------------------------------------------------------
 # Evaluation
 # -----------------------------------------------------------------------------
