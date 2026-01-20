@@ -4,7 +4,6 @@ import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
 import torch
-# from scipy.interpolate import CubicSpline  # Commented out: no longer using spline
 
 from pruning import PrunableLLM
 from pruning.create_pruning_mask import make_mask_fn
@@ -74,7 +73,7 @@ class LLMPruningEnv(gym.Env):
         
         # Spaces
         self.action_space = spaces.Box(
-            low=0.0, high=0.5, shape=(64,), dtype=np.float32
+            low=0.0, high=0.5, shape=(128,), dtype=np.float32
         )
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, shape=(embed_dim,), dtype=np.float32
