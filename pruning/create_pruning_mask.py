@@ -3,8 +3,8 @@ import torch
 from pathlib import Path
 from typing import Tuple
 
-_NEURON_IMPORTANCE_PATH = Path(__file__).parent / "cluster_neuron_importance_128.json"
-_LAYER_TO_CLUSTER_PATH = Path(__file__).parent / "layer_to_cluster_mapping_128.json"
+_NEURON_IMPORTANCE_PATH = Path(__file__).parent / "cluster_neuron_importance_64.json"
+_LAYER_TO_CLUSTER_PATH = Path(__file__).parent / "layer_to_cluster_mapping_64.json"
 
 with open(_NEURON_IMPORTANCE_PATH, 'r') as f:
     _CLUSTER_IMPORTANCE_DATA = json.load(f)
