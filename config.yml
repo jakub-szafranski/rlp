@@ -68,7 +68,7 @@ sac:
 training:
   total_timesteps: 5000
   log_interval: 50
-  save_path: checkpoints/sac_pruning_agent
+  save_path: checkpoints/sac_pruning_agent_32
   buffer_save_path: checkpoints/replay_buffer
   device: cuda             
   verbose: 1
