@@ -222,6 +222,7 @@ def create_env(config: dict, models: dict, data_source):
         quality_weight=env_conf.get("quality_weight", 0.7),
         baseline_perplexity=env_conf["baseline_perplexity"],
         device=models["device"],
+        pruning_type=env_conf["pruning_type"],
     )
 
 

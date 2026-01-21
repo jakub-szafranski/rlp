@@ -48,6 +48,7 @@ class LLMPruningEnv(gym.Env):
         max_seq_len: int = 2048,
         quality_weight: float = 0.7,
         device: str = "cuda",
+        pruning_type: Literal["layer", "cluster64", "cluster128"] = "cluster64",
         baseline_perplexity: Optional[float] = None,
     ):
         super().__init__()
@@ -61,7 +62,7 @@ class LLMPruningEnv(gym.Env):
         self.task = task
         self.baseline_perplexity = baseline_perplexity
         self.max_seq_len = max_seq_len
-        
+        self.pruning_type = pruning_type
         # Components based on task
         
         if task == "perplexity":
@@ -72,8 +73,9 @@ class LLMPruningEnv(gym.Env):
             self.reward_calculator = CorrectnessReward(quality_weight=quality_weight)
         
         # Spaces
+        n_action_map = {"layer": 32, "cluster64": 64, "cluster128": 128}
         self.action_space = spaces.Box(
-            low=0.0, high=0.5, shape=(64,), dtype=np.float32
+            low=0.0, high=0.5, shape=(n_action_map[self.pruning_type],), dtype=np.float32
         )
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, shape=(embed_dim,), dtype=np.float32
@@ -139,7 +141,7 @@ class LLMPruningEnv(gym.Env):
         assert self._current_item is not None, "Call reset() first"
                         
         # Apply pruning
-        mask_fn = make_mask_fn(list(action), device=self.device)
+        mask_fn = make_mask_fn(list(action), device=self.device, pruning_type=self.pruning_type)
         self.model.prune(mask_fn)
         
         # Compute metric on pruned model

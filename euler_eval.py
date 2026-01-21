@@ -52,6 +52,7 @@ class EvalPrunableLLM:
         agent: SAC,
         device: str = "cuda",
         deterministic: bool = True,
+        pruning_type: str = "cluster64",
     ):
         self.prunable_llm = prunable_llm
         self.llm_tokenizer = llm_tokenizer
@@ -60,6 +61,7 @@ class EvalPrunableLLM:
         self.agent = agent
         self.device = torch.device(device)
         self.deterministic = deterministic
+        self.pruning_type = pruning_type
         
         self.encoder.eval()
         for p in self.encoder.parameters():
@@ -109,7 +111,7 @@ class EvalPrunableLLM:
             
             action = self._get_pruning_action(text)
             
-            mask_fn = make_mask_fn(list(action), self.device)
+            mask_fn = make_mask_fn(list(action), self.device, pruning_type=self.pruning_type)
             self.prunable_llm.prune(mask_fn)
             
             try:
@@ -140,7 +142,7 @@ class EvalPrunableLLM:
             action = self._get_pruning_action(text)
             
             # Create mask function and apply pruning
-            mask_fn = make_mask_fn(list(action), self.device)
+            mask_fn = make_mask_fn(list(action), self.device, pruning_type=self.pruning_type)
             self.prunable_llm.prune(mask_fn)
             
             try:
@@ -179,6 +181,7 @@ def create_eval_model(config: dict):
     model_conf = config["model"]
     encoder_conf = config["encoder"]
     train_conf = config["training"]
+    env_conf = config["environment"]
     device = train_conf.get("device", "cuda" if torch.cuda.is_available() else "cpu")
     
     print(f"Loading LLM: {model_conf['name']}...")
@@ -210,6 +213,7 @@ def create_eval_model(config: dict):
         agent=agent,
         device=device,
         deterministic=True,
+        pruning_type=env_conf["pruning_type"]
     )
     
     return eval_model, llm_tokenizer

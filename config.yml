@@ -33,6 +33,7 @@ environment:
   max_seq_len: 4096          # max tokens for perplexity calculation
   quality_weight: 0.999       # weight for quality (ppl/acc) vs sparsity reward
   baseline_perplexity: 7.1  # optional: if set, use this constant baseline for speed
+  pruning_type: layer    # cluster64, cluster128, layer
 
 # -----------------------------------------------------------------------------
 # SAC Hyperparameters
