@@ -204,7 +204,9 @@ def create_eval_model(config: dict):
     agent_path = train_conf["save_path"]
     print(f"Loading agent from: {agent_path}...")
     agent = SAC.load(agent_path)
-        
+    print(f"Agent action space: {agent.action_space}")
+
+    print("Using pruning type:", env_conf["pruning_type"])    
     eval_model = EvalPrunableLLM(
         prunable_llm=prunable_llm,
         llm_tokenizer=llm_tokenizer,
