@@ -56,7 +56,7 @@ sac:
 
   # SAC Specifics
   ent_coef: 'auto'             # MUST be 'auto' for automatic tuning
-  target_entropy: -16      
+  target_entropy: -8.0      
   
   # Policy network architecture
   pi_layers: [768, 512]        
@@ -69,8 +69,8 @@ training:
   total_timesteps: 5000
   log_interval: 50
   save_path: checkpoints/sac_pruning_agent_32
-  buffer_save_path: checkpoints/replay_buffer
-  device: cuda             
+  buffer_save_path: checkpoints/replay_buffer_32
+  device: cuda
   verbose: 1
 
   pretrain_buffer_path: null # checkpoints/replay_buffer
