@@ -52,7 +52,7 @@ sac:
   # Exploration
   use_sde: True                # CRITICAL: Generalized State Dependent Exploration
   sde_sample_freq: -1          # Sample noise once per episode (consistent exploration)
-  use_sde_at_warmup: True      # Even during warmup, use structured noise
+  use_sde_at_warmup: False      # Even during warmup, use structured noise
 
   # SAC Specifics
   ent_coef: 'auto'             # MUST be 'auto' for automatic tuning
