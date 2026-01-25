@@ -229,6 +229,69 @@ def create_env(config: dict, models: dict, data_source):
     )
 
 
+import torch as th
+from torch import nn
+from stable_baselines3 import SAC
+from stable_baselines3.sac.policies import SACPolicy, Actor, ContinuousCritic
+from stable_baselines3.common.torch_layers import create_mlp
+
+class RobustActor(Actor):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Re-build the latent_pi network with Dropout and LayerNorm
+        # Structure: Linear -> LayerNorm -> GELU -> Dropout -> ...
+        net_arch = kwargs.get("net_arch", [256, 256])
+        
+        # Note: We must manually rebuild the network because SB3's create_mlp is rigid
+        layers = []
+        last_layer_dim = self.features_dim
+        
+        for curr_layer_dim in net_arch:
+            layers.append(nn.Linear(last_layer_dim, curr_layer_dim))
+            layers.append(nn.LayerNorm(curr_layer_dim)) # 1. LayerNorm
+            layers.append(nn.GELU())                    # 2. GELU (often better than ReLU for low data)
+            layers.append(nn.Dropout(p=0.1))            # 3. Dropout (Small rate: 0.05 to 0.2)
+            last_layer_dim = curr_layer_dim
+            
+        self.latent_pi = nn.Sequential(*layers)
+        # Re-connect the output heads
+        self.mu = nn.Linear(last_layer_dim, self.action_dist.action_dim)
+        self.log_std = nn.Linear(last_layer_dim, self.action_dist.action_dim)
+
+class RobustCritic(ContinuousCritic):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # We need to rebuild the q-networks (qf1 and qf2)
+        net_arch = kwargs.get("net_arch", [256, 256])
+        
+        for i in range(self.n_critics):
+            layers = []
+            last_layer_dim = self.features_dim + self.action_dim
+            
+            for curr_layer_dim in net_arch:
+                layers.append(nn.Linear(last_layer_dim, curr_layer_dim))
+                layers.append(nn.LayerNorm(curr_layer_dim))
+                layers.append(nn.GELU())
+                layers.append(nn.Dropout(p=0.1)) # Dropout in Critic is CRITICAL for low data
+                last_layer_dim = curr_layer_dim
+            
+            layers.append(nn.Linear(last_layer_dim, 1))
+            
+            if i == 0:
+                self.qf1 = nn.Sequential(*layers)
+            else:
+                self.qf2 = nn.Sequential(*layers)
+
+class RobustSACPolicy(SACPolicy):
+    def make_actor(self, features_extractor=None):
+        actor_kwargs = self._update_features_extractor(self.actor_kwargs, features_extractor)
+        return RobustActor(**actor_kwargs).to(self.device)
+
+    def make_critic(self, features_extractor=None):
+        critic_kwargs = self._update_features_extractor(self.critic_kwargs, features_extractor)
+        return RobustCritic(**critic_kwargs).to(self.device)
+
+
 def train(config: dict):
     """Train SAC agent."""
     data_conf = config["data"]
@@ -251,33 +314,24 @@ def train(config: dict):
     env = create_env(config, models, train_data)
     
     print("Creating SAC agent...")
-    policy_kwargs = dict(
-        net_arch=dict(
-            pi=sac_conf["pi_layers"],
-            qf=sac_conf["qf_layers"],
-        ),
-        activation_fn=torch.nn.GELU,
-    )
-    
+
     agent = SAC(
-        "MlpPolicy",
+        RobustSACPolicy, 
         env,
         learning_rate=sac_conf["learning_rate"],
         buffer_size=sac_conf["buffer_size"],
         learning_starts=sac_conf["learning_starts"],
         batch_size=sac_conf["batch_size"],
         tau=sac_conf["tau"],
-        gamma=sac_conf["gamma"],
+        gamma=sac_conf["gamma"],          
         train_freq=sac_conf["train_freq"],
-        gradient_steps=sac_conf["gradient_steps"],
-        use_sde=sac_conf["use_sde"],
-        sde_sample_freq=sac_conf["sde_sample_freq"],
-        use_sde_at_warmup=sac_conf["use_sde_at_warmup"],
-        ent_coef=sac_conf["ent_coef"],
-        target_entropy=sac_conf["target_entropy"],
-        policy_kwargs=policy_kwargs,
-        verbose=train_conf["verbose"],
-        seed=config["random_state"],
+        gradient_steps=sac_conf["gradient_steps"],  
+        ent_coef=sac_conf["ent_coef"],       
+        use_sde=sac_conf["use_sde"],        
+        policy_kwargs=dict(
+            net_arch=sac_conf["pi_layers"], 
+        ),
+        verbose=1
     )
     
     # Configure logging for monitoring RL metrics
