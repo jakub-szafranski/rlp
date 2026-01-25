@@ -1,4 +1,6 @@
 import json
+import os
+os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1" # Disable HF progress bars for cleaner output
 
 import argparse
 import yaml
@@ -16,8 +18,6 @@ from pruning import PrunableLLM
 from rl.env import LLMPruningEnv
 from rl.data_source import WikiTextDataSource, MMLUDataSource
 
-import os
-os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1" # Disable HF progress bars for cleaner output
 
 def load_config(config_path: str = "config.yml") -> dict:
     with open(config_path, "r") as f:

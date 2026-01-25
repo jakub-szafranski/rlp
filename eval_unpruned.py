@@ -1,3 +1,7 @@
+import os
+os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1" # Disable HF progress bars for cleaner output
+
+
 import yaml
 import torch
 import numpy as np
@@ -11,8 +15,6 @@ from pruning.create_pruning_mask import make_mask_fn
 from rl.data_source import WikiTextDataSource, MMLUDataSource
 from rl.metrics import PerplexityCalculator, MMLULoglikelihoodCalculator
 
-import os
-os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1" # Disable HF progress bars for cleaner output
 
 def load_config(config_path: str = "config.yml") -> dict:
     with open(config_path, "r") as f:
