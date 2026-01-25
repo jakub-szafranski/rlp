@@ -256,7 +256,7 @@ class RobustActor(Actor):
         self.latent_pi = nn.Sequential(*layers)
         # Re-connect the output heads
         self.mu = nn.Linear(last_layer_dim, self.action_dist.action_dim)
-        self.log_std = nn.Linear(last_layer_dim, self.action_dist.action_dim)
+        self.log_std_layer= nn.Linear(last_layer_dim, self.action_dist.action_dim)
 
 class RobustCritic(ContinuousCritic):
     def __init__(self, *args, **kwargs):
