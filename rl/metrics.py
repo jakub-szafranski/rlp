@@ -87,6 +87,7 @@ class PerplexityCalculator(MetricCalculator):
             else:
                 total_log_likelihood += token_log_probs.sum().item()
                 total_tokens += token_log_probs.numel()
+            break  # Only process one window at a time # TODO: TEMPORARY HACK
         
         return (total_log_likelihood, total_tokens)
     

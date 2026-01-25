@@ -177,7 +177,7 @@ def load_models(config: dict):
     print(f"Loading LLM: {model_conf['name']}...")
     llm = AutoModelForCausalLM.from_pretrained(
         model_conf["name"],
-        torch_dtype=getattr(torch, model_conf.get("dtype", "float16")),
+        torch_dtype=getattr(torch, model_conf.get("dtype", "bfloat16")),
         device_map=device,
     )
     llm_tokenizer = AutoTokenizer.from_pretrained(model_conf["name"])
@@ -185,7 +185,10 @@ def load_models(config: dict):
     prunable_llm.model.eval()
     
     print(f"Loading encoder: {encoder_conf['name']}...")
-    encoder = AutoModel.from_pretrained(encoder_conf["name"]).to(device)
+    encoder = AutoModel.from_pretrained(
+        encoder_conf["name"],
+        torch_dtype=getattr(torch, encoder_conf.get("dtype", "bfloat16")),
+    ).to(device)
     encoder.eval()
     for p in encoder.parameters():
         p.requires_grad = False
