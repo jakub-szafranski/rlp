@@ -187,7 +187,7 @@ def load_models(config: dict):
     print(f"Loading encoder: {encoder_conf['name']}...")
     encoder = AutoModel.from_pretrained(
         encoder_conf["name"],
-        torch_dtype=getattr(torch, encoder_conf.get("dtype", "bfloat16")),
+        torch_dtype=torch.float16,
     ).to(device)
     encoder.eval()
     for p in encoder.parameters():
