@@ -41,7 +41,7 @@ environment:
 # Big training: change buffer: 50k, episodes: 50k, learning_starts: 5k (or multiply by 2)
 sac:
   learning_rate: 3.0e-4        
-  buffer_size: 5000
+  buffer_size: 20000
   learning_starts: 250        # Collect random steps before training starts           
   batch_size: 256              
   tau: 0.02                   
@@ -66,7 +66,7 @@ sac:
 # Training
 # -----------------------------------------------------------------------------
 training:
-  total_timesteps: 5000
+  total_timesteps: 10000
   log_interval: 50
   save_path: checkpoints/sac_pruning_agent_32
   buffer_save_path: checkpoints/replay_buffer_32
