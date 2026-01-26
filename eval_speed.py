@@ -98,8 +98,9 @@ def evaluate_speed(prunable_llm, tokenizer, encoder, encoder_tokenizer, agent, d
         mean_time = np.mean(times)
         std_time = np.std(times)
         print(f"  {num_tokens} tokens: {mean_time:.3f}s ± {std_time:.3f}s")
-        print(f"Generated text: {tokenizer.decode(output[0], skip_special_tokens=True)}")
-        print("")
+        if num_tokens == num_tokens_list[-1]:
+            print(f"Generated text: {tokenizer.decode(output[0], skip_special_tokens=True)}")
+            print("")
 
     # Pruned evaluation
     print("\n=== Pruned Model (with agent) ===")
@@ -107,6 +108,7 @@ def evaluate_speed(prunable_llm, tokenizer, encoder, encoder_tokenizer, agent, d
     action, _ = agent.predict(observation, deterministic=True)
     mask_fn = make_mask_fn(list(action), device, pruning_type=pruning_type)
     prunable_llm.prune(mask_fn)
+    print(f"Sparsity after pruning: {prunable_llm.sparsity:.2%}")
 
     try:
         for num_tokens in num_tokens_list:
@@ -125,7 +127,9 @@ def evaluate_speed(prunable_llm, tokenizer, encoder, encoder_tokenizer, agent, d
             mean_time = np.mean(times)
             std_time = np.std(times)
             print(f"  {num_tokens} tokens: {mean_time:.3f}s ± {std_time:.3f}s")
-            print(f"Generated text: {tokenizer.decode(output[0], skip_special_tokens=True)}")
+            if num_tokens == num_tokens_list[-1]:
+                print(f"Generated text: {tokenizer.decode(output[0], skip_special_tokens=True)}")
+                print("")
 
     finally:
         prunable_llm.undo_prune()
@@ -135,6 +139,6 @@ if __name__ == "__main__":
     config = load_config()
     prunable_llm, tokenizer, encoder, encoder_tokenizer, agent, device, pruning_type = create_models(config)
 
-    prompt = "Guide to machine learning:\nChapter 1: "
+    prompt = "Write a short story about a brave knight who saves a village from a dragon.\n\nLong ago, in a land far away, "
 
     evaluate_speed(prunable_llm, tokenizer, encoder, encoder_tokenizer, agent, device, pruning_type, prompt)
