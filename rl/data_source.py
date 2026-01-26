@@ -71,6 +71,8 @@ class WikiTextDataSource(DataSource):
                 "wikitext-103-raw-v1",
                 split=self.split
             )
+            # shuffle dataset
+            self._dataset = self._dataset.shuffle() 
             if self.max_samples:
                 self._dataset = self._dataset.select(range(min(self.max_samples, len(self._dataset))))
     
