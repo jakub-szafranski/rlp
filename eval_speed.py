@@ -98,6 +98,8 @@ def evaluate_speed(prunable_llm, tokenizer, encoder, encoder_tokenizer, agent, d
         mean_time = np.mean(times)
         std_time = np.std(times)
         print(f"  {num_tokens} tokens: {mean_time:.3f}s ± {std_time:.3f}s")
+        print(f"Generated text: {tokenizer.decode(output[0], skip_special_tokens=True)}")
+        print("")
 
     # Pruned evaluation
     print("\n=== Pruned Model (with agent) ===")
