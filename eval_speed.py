@@ -78,7 +78,7 @@ def evaluate_speed(prunable_llm, tokenizer, encoder, encoder_tokenizer, agent, d
     # Tokenize prompt
     input_ids = tokenizer.encode(prompt, return_tensors="pt").to(device)
 
-    num_tokens_list = [10, 50, 100]
+    num_tokens_list = [10, 50, 100, 250, 500]
 
     # Unpruned evaluation
     print("\n=== Unpruned Model ===")
@@ -125,6 +125,8 @@ def evaluate_speed(prunable_llm, tokenizer, encoder, encoder_tokenizer, agent, d
             mean_time = np.mean(times)
             std_time = np.std(times)
             print(f"  {num_tokens} tokens: {mean_time:.3f}s ± {std_time:.3f}s")
+            print(f"Generated text: {tokenizer.decode(output[0], skip_special_tokens=True)}")
+
     finally:
         prunable_llm.undo_prune()
 
